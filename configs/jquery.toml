@@ -1,0 +1,18 @@
+# Closer to the video's setup: large real-world JS file. ~280KB / ~80K tokens.
+# Make sure your model is loaded with at least 100K context (see README).
+
+[files]
+directory = "fixtures"
+glob = "jquery.js"
+limit = 1
+
+[sample]
+k = 16
+seed = 42
+
+[model]
+name = "qwen3.6-35b-a3b"
+base_url = "http://localhost:1234"
+temperature = 0.0
+max_tokens = 6000
+suppress_thinking = true

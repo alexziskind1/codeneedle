@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# macOS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime artifacts
+*.log
+
+# Benchmark outputs — each user generates their own
+results/*.json
