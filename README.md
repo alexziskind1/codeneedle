@@ -65,6 +65,9 @@ The split is by axis-of-change. You rarely change which files to test, but
 you constantly compare different models — so an N×M comparison needs only
 N+M files, not N*M.
 
+> Field-by-field reference for every TOML key, plus recipes for adding a new
+> corpus or model, lives in [`configs/CONFIG_README.md`](configs/CONFIG_README.md).
+
 ### Corpora — `configs/corpora/<name>.toml`
 
 ```toml
