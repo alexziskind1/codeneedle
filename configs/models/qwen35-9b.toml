@@ -1,9 +1,11 @@
-# Qwen3 4B (small, non-reasoning by default).
-# Honors the `/no_think` directive, so 1500 max_tokens is plenty.
+# Qwen3.5 9B — reasoning-on by default, ignores /no_think and the other
+# thinking-disable knobs (same family behavior as Qwen3.6). The CoT pass is
+# long, so max_tokens has to cover both reasoning AND the ~20-line answer;
+# 1500 was the qwen3-4b template default and is far too tight here.
 
 name              = "qwen/qwen3.5-9b"
 base_url          = "http://localhost:1234"
 temperature       = 0.0
-max_tokens        = 1500
+max_tokens        = 12000
 timeout           = 600.0
-suppress_thinking = true
+suppress_thinking = true   # appended anyway; harmless when ignored

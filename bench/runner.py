@@ -117,6 +117,7 @@ def run_benchmark(
     function_filter: list[str] | None = None,
     suppress_thinking: bool = True,
     skip_preflight: bool = False,
+    fail_fast_after: int | None = 2,
 ) -> list[FunctionScore]:
     text = source.text
     total_lines = text.count("\n") + 1
@@ -180,6 +181,7 @@ def run_benchmark(
 
     scores: list[FunctionScore] = []
     runs: list[_Run] = []
+    consecutive_errors = 0
     for i, t in enumerate(chosen, 1):
         prompt = _build_prompt(t, text, multi_file, suppress_thinking)
         print(
@@ -224,6 +226,41 @@ def run_benchmark(
             )
         )
         print(render_function(sc), flush=True)
+
+        # Fail-fast: if N queries in a row error, the rest will too. Bail.
+        if score_error:
+            consecutive_errors += 1
+        else:
+            consecutive_errors = 0
+        if (
+            fail_fast_after is not None
+            and consecutive_errors >= fail_fast_after
+            and i < len(chosen)
+        ):
+            remaining = len(chosen) - i
+            print(
+                f"\n⚠ {consecutive_errors} consecutive ERROR results — aborting the "
+                f"remaining {remaining} queries.",
+                flush=True,
+            )
+            print(
+                "  Same prompt size + same model + same params → same outcome. "
+                "Likely fixes:",
+                flush=True,
+            )
+            print(
+                "    • Reasoning model burning the budget? bump --max-tokens (try 8000–12000)",
+                flush=True,
+            )
+            print(
+                "    • Server-side error? check logs and the per-query message above",
+                flush=True,
+            )
+            print(
+                "  Pass --no-fail-fast to disable this check and run every query anyway.",
+                flush=True,
+            )
+            break
 
     print(render_summary(scores), flush=True)
 

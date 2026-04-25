@@ -153,6 +153,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         function_filter=fn_filter,
         suppress_thinking=suppress_thinking,
         skip_preflight=args.skip_preflight,
+        fail_fast_after=None if args.no_fail_fast else args.fail_fast_after,
     )
     passed = sum(1 for s in scores if s.passed)
     return 0 if passed == len(scores) else 1
@@ -247,6 +248,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--skip-preflight", action="store_true",
         help="skip the context-fit pre-flight probe (not recommended)",
+    )
+    p_run.add_argument(
+        "--fail-fast-after", type=int, default=2, metavar="N",
+        help="abort the run after N consecutive ERROR results (default: 2)",
+    )
+    p_run.add_argument(
+        "--no-fail-fast", action="store_true",
+        help="disable fail-fast; run every query even if they're all erroring",
     )
     p_run.set_defaults(func=cmd_run)
 
