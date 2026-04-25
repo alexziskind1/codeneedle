@@ -1,0 +1,11 @@
+# Closer to the video's setup: large real-world JS. ~280KB / ~80K tokens.
+# Make sure your model is loaded with at least 100K context.
+
+[files]
+directory = "fixtures"
+glob = "jquery.js"
+limit = 1
+
+[sample]
+k = 16
+seed = 42

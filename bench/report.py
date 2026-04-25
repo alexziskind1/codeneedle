@@ -31,6 +31,17 @@ def render_function(score: FunctionScore, color: bool | None = None) -> str:
     if color is None:
         color = sys.stdout.isatty()
 
+    if score.error:
+        # Distinguish from a real recall miss — the model never actually answered.
+        status = "ERROR"
+        status_color = "\x1b[35m"  # magenta — visually distinct from PASS green / FAIL red
+        header = (
+            f"\n=== {score.name}  "
+            f"[{_colorize(color, status_color, status)}]  "
+            f"{score.error}"
+        )
+        return header
+
     status = "PASS" if score.passed else "FAIL"
     status_color = "\x1b[32m" if score.passed else "\x1b[31m"
     header = (
@@ -55,16 +66,19 @@ def render_function(score: FunctionScore, color: bool | None = None) -> str:
 def render_summary(scores: list[FunctionScore], color: bool | None = None) -> str:
     if color is None:
         color = sys.stdout.isatty()
-    passed = sum(1 for s in scores if s.passed)
-    total_matched = sum(s.primary_matched for s in scores)
-    total_possible = sum(s.primary_total for s in scores)
-    total_halluc = sum(s.hallucinated for s in scores)
-    total_bonus = sum(s.bonus_matched for s in scores)
+    errored = [s for s in scores if s.error]
+    real = [s for s in scores if not s.error]
+    passed = sum(1 for s in real if s.passed)
+    total_matched = sum(s.primary_matched for s in real)
+    total_possible = sum(s.primary_total for s in real)
+    total_halluc = sum(s.hallucinated for s in real)
+    total_bonus = sum(s.bonus_matched for s in real)
 
     lines = [
         "",
         _colorize(color, BOLD, "=== SUMMARY ==="),
-        f"  Pass:                  {passed}/{len(scores)}",
+        f"  Pass:                  {passed}/{len(real)}"
+        + (f"  ({len(errored)} errored)" if errored else ""),
         f"  Primary lines matched: {total_matched}/{total_possible}",
         f"  Hallucinated lines:    {total_halluc}",
         f"  Bonus (extra correct): {total_bonus}",
@@ -74,10 +88,14 @@ def render_summary(scores: list[FunctionScore], color: bool | None = None) -> st
     lines.append("")
     lines.append("  per-function:")
     for s in scores:
-        mark = _colorize(color, "\x1b[32m", "✓") if s.passed else _colorize(color, "\x1b[31m", "✗")
-        lines.append(
-            f"    {mark} {s.name:<40} "
-            f"matched={s.primary_matched:>2}/{s.primary_total}  "
-            f"halluc={s.hallucinated:>2}  bonus={s.bonus_matched:>2}"
-        )
+        if s.error:
+            mark = _colorize(color, "\x1b[35m", "!")
+            lines.append(f"    {mark} {s.name:<40} ERROR  {s.error}")
+        else:
+            mark = _colorize(color, "\x1b[32m", "✓") if s.passed else _colorize(color, "\x1b[31m", "✗")
+            lines.append(
+                f"    {mark} {s.name:<40} "
+                f"matched={s.primary_matched:>2}/{s.primary_total}  "
+                f"halluc={s.hallucinated:>2}  bonus={s.bonus_matched:>2}"
+            )
     return "\n".join(lines)

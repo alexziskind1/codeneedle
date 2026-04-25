@@ -32,6 +32,7 @@ class FunctionScore:
     passed: bool
     expected_tagged: list[LineResult]    # expected primary side (matched/missing)
     predicted_tagged: list[LineResult]   # model output side (matched/halluc/bonus)
+    error: str | None = None             # request errored or returned no usable content; renderers should show ERROR instead of FAIL so it isn't confused with a real recall miss
 
 
 def score(

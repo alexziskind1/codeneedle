@@ -60,6 +60,52 @@ class _Run:
     prompt_chars: int
     response: str
     latency_s: float
+    error: str | None = None
+
+
+def _build_prompt(target, text: str, multi_file: bool, suppress_thinking: bool) -> str:
+    anchor = ANCHOR_PHRASE[target.language].format(name=target.name)
+    sig_marker = SIGNATURE_MARKER[target.language].format(name=target.name)
+    file_qualifier = (
+        f" in file `{target.source_path}`" if multi_file and target.source_path else ""
+    )
+    return PROMPT_TEMPLATE.format(
+        file_contents=text,
+        name=target.name,
+        file_qualifier=file_qualifier,
+        n=len(target.primary_lines),
+        anchor_phrase=anchor,
+        signature_marker=sig_marker,
+        thinking_suffix=NO_THINK_SUFFIX if suppress_thinking else "",
+    )
+
+
+def _preflight_context_check(prompt: str, cfg: ClientConfig) -> str | None:
+    """Send the actual prompt with max_tokens=1 to detect context-too-small.
+
+    Returns None on success, an error message string otherwise. Cheap because
+    no real generation happens — the model only ingests the prompt and emits
+    a single token. As a side benefit it warms the server's prefix KV cache
+    for the rest of the run.
+    """
+    probe_cfg = ClientConfig(
+        base_url=cfg.base_url,
+        model=cfg.model,
+        api_key=cfg.api_key,
+        temperature=0.0,
+        max_tokens=1,
+        timeout=cfg.timeout,
+    )
+    try:
+        chat_complete(probe_cfg, system=None, user=prompt)
+        return None
+    except Exception as e:
+        return str(e)
+
+
+def _is_context_error(msg: str) -> bool:
+    m = msg.lower()
+    return any(s in m for s in ("context length", "n_ctx", "n_keep", "too long", "exceeds"))
 
 
 def run_benchmark(
@@ -70,6 +116,7 @@ def run_benchmark(
     dump_path: Path | None = None,
     function_filter: list[str] | None = None,
     suppress_thinking: bool = True,
+    skip_preflight: bool = False,
 ) -> list[FunctionScore]:
     text = source.text
     total_lines = text.count("\n") + 1
@@ -101,45 +148,70 @@ def run_benchmark(
         )
 
     multi_file = len(source.files) > 1
+
+    # Pre-flight: send the first real prompt with max_tokens=1 to check that
+    # the loaded context is big enough. Misleading FAILs from context-too-small
+    # are the easiest mistake to make with LM Studio (TTL-driven JIT reload at
+    # default 4K context). Better to abort up front.
+    if not skip_preflight:
+        probe_prompt = _build_prompt(chosen[0], text, multi_file, suppress_thinking)
+        print(
+            f"\nPre-flight: probing context fit with a {len(probe_prompt):,}-char prompt "
+            f"(max_tokens=1)...",
+            flush=True,
+        )
+        err = _preflight_context_check(probe_prompt, cfg)
+        if err is None:
+            print("Pre-flight OK.", flush=True)
+        elif _is_context_error(err):
+            print(f"\n❌ pre-flight failed (context too small):\n   {err}\n", flush=True)
+            print("The loaded model context is smaller than the prompt. The most common", flush=True)
+            print("cause is LM Studio JIT-reloading at default 4K context after its TTL", flush=True)
+            print("expired. Force-reload at the size you need:", flush=True)
+            print(f"\n   lms unload {cfg.model}", flush=True)
+            print(f"   lms load {cfg.model} --context-length 131072 --gpu max -y\n", flush=True)
+            print("Re-run after the model is loaded. (Pass --skip-preflight to override.)", flush=True)
+            raise SystemExit(2)
+        else:
+            print(f"\n❌ pre-flight failed: {err}\n", flush=True)
+            print("The server is reachable but rejected the request for a non-context reason.", flush=True)
+            print("Fix the server-side error or pass --skip-preflight to push past this check.", flush=True)
+            raise SystemExit(2)
+
     scores: list[FunctionScore] = []
     runs: list[_Run] = []
     for i, t in enumerate(chosen, 1):
-        anchor = ANCHOR_PHRASE[t.language].format(name=t.name)
-        sig_marker = SIGNATURE_MARKER[t.language].format(name=t.name)
-        file_qualifier = (
-            f" in file `{t.source_path}`" if multi_file and t.source_path else ""
-        )
-        prompt = PROMPT_TEMPLATE.format(
-            file_contents=text,
-            name=t.name,
-            file_qualifier=file_qualifier,
-            n=len(t.primary_lines),
-            anchor_phrase=anchor,
-            signature_marker=sig_marker,
-            thinking_suffix=NO_THINK_SUFFIX if suppress_thinking else "",
-        )
+        prompt = _build_prompt(t, text, multi_file, suppress_thinking)
         print(
             f"\n[{i}/{len(chosen)}] `{t.name}` — prompt {len(prompt):,} chars, waiting on model...",
             flush=True,
         )
         start = time.monotonic()
+        request_error: str | None = None
         try:
             resp = chat_complete(cfg, system=None, user=prompt)
         except Exception as e:
-            print(f"  ERROR: {e}", flush=True)
+            request_error = str(e)
+            print(f"  ERROR: {request_error}", flush=True)
             resp = ""
         latency = time.monotonic() - start
         print(f"  response: {len(resp)} chars in {latency:.1f}s", flush=True)
-        if resp.strip() == "":
-            print(
-                "  ⚠ empty response — likely causes: (1) reasoning model burned the "
-                "entire max_tokens budget on chain-of-thought (try --max-tokens 8000); "
-                "(2) loaded context size is smaller than the prompt (check `lms ps` and "
-                "force-reload with --context-length).",
-                flush=True,
+
+        # Empty content with no exception = HTTP 200 but the model produced
+        # nothing. On reasoning models that's typically the CoT eating the
+        # entire max_tokens budget. Treat as a non-recall error so it shows
+        # as ERROR, not FAIL.
+        score_error = request_error
+        if resp.strip() == "" and score_error is None:
+            score_error = (
+                "empty response (200 OK but no content; reasoning models often need "
+                "more max_tokens — try --max-tokens 8000)"
             )
+            print(f"  ⚠ {score_error}", flush=True)
 
         sc = score(t.name, t.primary_lines, t.bonus_lines, resp)
+        if score_error:
+            sc.error = score_error
         scores.append(sc)
         runs.append(
             _Run(
@@ -148,6 +220,7 @@ def run_benchmark(
                 prompt_chars=len(prompt),
                 response=resp,
                 latency_s=latency,
+                error=score_error,
             )
         )
         print(render_function(sc), flush=True)
@@ -167,6 +240,7 @@ def run_benchmark(
                     "function": sc.name,
                     "source_file": r.source_path,
                     "passed": sc.passed,
+                    "error": sc.error,
                     "primary_matched": sc.primary_matched,
                     "primary_total": sc.primary_total,
                     "hallucinated": sc.hallucinated,
