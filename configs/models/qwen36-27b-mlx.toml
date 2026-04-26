@@ -1,0 +1,16 @@
+# Qwen3.6 27B (MLX format, Apple Silicon native). Same family as qwen36-35b
+# so the same reasoning-disable technique applies: `prefill_no_think` works,
+# `/no_think` and `reasoning_effort` don't (per the matrix in CONFIG_README).
+# With CoT skipped, max_tokens=1500 is plenty for the 20-line task.
+#
+# If the run produces empty responses, the prefill probably isn't being
+# honored on this build — bump max_tokens to ~6000 and see if the model
+# completes both CoT and the answer in that budget.
+
+name              = "qwen3.6-27b-mlx"
+base_url          = "http://localhost:1234"
+temperature       = 0.0
+max_tokens        = 1500
+timeout           = 600.0
+prefill_no_think  = true    # the only technique that reliably skips CoT on qwen3.6
+suppress_thinking = true    # appends /no_think; harmless when ignored

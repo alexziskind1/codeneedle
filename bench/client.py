@@ -19,6 +19,7 @@ class ClientConfig:
     # freely; harmless flags are just ignored by models that don't recognize them.
     reasoning_effort: str | None = None    # sends `reasoning_effort: <value>` in request body (e.g. "none", "low")
     prefill_no_think: bool = False         # appends an assistant message containing `<think>\n</think>\n\n`
+    stop: list[str] | None = None          # stop sequences sent to the server; useful for models that parrot the prompt back (Gemma 4)
 
 
 def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
@@ -41,6 +42,8 @@ def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
     }
     if cfg.reasoning_effort is not None:
         payload["reasoning_effort"] = cfg.reasoning_effort
+    if cfg.stop:
+        payload["stop"] = cfg.stop
 
     headers = {"Content-Type": "application/json"}
     if cfg.api_key:

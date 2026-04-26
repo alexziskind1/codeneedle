@@ -114,6 +114,9 @@ def load_model_from_file(path: Path) -> ModelConfig:
     raw = tomllib.loads(path.read_text())
     if "name" not in raw:
         raise ValueError(f"{path}: required field `name` (model identifier) is missing")
+    stop_raw = raw.get("stop")
+    if stop_raw is not None and not isinstance(stop_raw, list):
+        raise ValueError(f"{path}: `stop` must be a list of strings if set")
     client = ClientConfig(
         base_url=raw.get("base_url", "http://localhost:1234"),
         model=raw["name"],
@@ -123,6 +126,7 @@ def load_model_from_file(path: Path) -> ModelConfig:
         timeout=float(raw.get("timeout", 600.0)),
         reasoning_effort=raw.get("reasoning_effort"),
         prefill_no_think=bool(raw.get("prefill_no_think", False)),
+        stop=stop_raw,
     )
     return ModelConfig(
         name=path.stem,

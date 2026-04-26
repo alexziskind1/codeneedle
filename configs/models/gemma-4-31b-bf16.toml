@@ -1,0 +1,24 @@
+# Gemma 4 31B (bf16, full precision). Non-reasoning by default — Gemma family
+# doesn't use chain-of-thought, so the disable techniques don't apply.
+#
+# Heads-up from the video: Gemma 4 uses sliding-window attention with a small
+# look-back window. Expect strong results on small contexts (http_server,
+# ~14K tokens) and a noticeable cliff once the prompt gets long (jquery,
+# ~80K tokens). If recall craters specifically on jquery, that's the SWA tax,
+# not a benchmark bug.
+#
+# bf16 weights: 31B × 2 bytes ≈ 62GB resident. Prompt ingestion of an 80K-token
+# file is slow at full precision — bumped timeout accordingly.
+
+name              = "gemma-4-31b@bf16"
+base_url          = "http://localhost:1234"
+temperature       = 0.0
+max_tokens        = 2000        # ~50 lines of code; plenty for the 20-line task
+timeout           = 1200.0      # bf16 + long prompt = slow first query
+suppress_thinking = true        # appends /no_think; harmless when ignored
+# Gemma 4 doesn't know when to stop — it parrots the entire prompt back after
+# answering, burning the rest of max_tokens on copies of "---\nTask:\nRules:".
+# These stop sequences cut the response off at the natural answer boundary.
+stop              = ["\n---", "\nTask:", "\nRules:"]
+# reasoning_effort / prefill_no_think — leave unset; only relevant for
+# reasoning-on-by-default models like Qwen3.5+.

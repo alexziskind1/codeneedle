@@ -84,6 +84,7 @@ timeout           = 600.0
 suppress_thinking = true
 reasoning_effort  = "none"                  # optional
 prefill_no_think  = false                   # optional
+stop              = ["\n---", "\nTask:"]    # optional
 ```
 
 | field | required | default | meaning |
@@ -97,6 +98,7 @@ prefill_no_think  = false                   # optional
 | `suppress_thinking` | no | `true` | appends `/no_think` to the user message. The CLI flag `--think` flips this off. See the matrix below — only some models honor it. |
 | `reasoning_effort` | no | `null` | sends `reasoning_effort: <value>` in the request body. Use `"none"` to attempt full disable; or `"low"` / `"medium"` / `"high"` (OpenAI o-series style). |
 | `prefill_no_think` | no | `false` | adds an assistant message containing `<think>\n</think>\n\n` after the user prompt. The model continues from after `</think>`, skipping CoT. |
+| `stop` | no | `null` | list of stop sequences sent to the server. Useful for models that **parrot the prompt back** after answering (Gemma 4 does this on every query). Pick strings that appear in your prompt boilerplate but not in real code — `"\n---"`, `"\nTask:"`, `"\nRules:"` are good defaults. |
 
 ### Disabling chain-of-thought — the actual matrix
 

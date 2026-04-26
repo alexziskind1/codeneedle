@@ -1,0 +1,17 @@
+# Gemma 4 31B (4-bit quant). Same architecture as the bf16 build, just lighter
+# and faster. The video specifically called out that quantization affects recall
+# quality — different quant builds gave different scores on the same corpus —
+# so worth comparing this against the bf16 sibling.
+#
+# Same SWA caveat applies: expect a cliff between http_server (~14K tokens) and
+# jquery (~80K tokens) if Gemma 4's look-back window is short like Gemma 3's.
+
+name              = "gemma-4-31b@4bit"
+base_url          = "http://localhost:1234"
+temperature       = 0.0
+max_tokens        = 2000        # ~50 lines of code; plenty for the 20-line task
+timeout           = 600.0       # 4-bit is roughly 4× faster to ingest than bf16
+suppress_thinking = true        # appends /no_think; harmless when ignored
+# Gemma 4 parrots the prompt back after answering — cut it off before that.
+stop              = ["\n---", "\nTask:", "\nRules:"]
+# reasoning_effort / prefill_no_think — leave unset; Gemma is non-reasoning.
