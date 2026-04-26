@@ -12,8 +12,13 @@ class ClientConfig:
     model: str
     api_key: str = "not-needed"
     temperature: float = 0.0
-    max_tokens: int = 6000  # generous — reasoning models (qwen3.6, o1-style) can't reliably be told to skip CoT, so the budget must cover reasoning + ~20 answer lines
+    max_tokens: int = 6000  # generous — reasoning models can spend most of this on CoT
     timeout: float = 600.0
+    # Reasoning-suppression techniques. Each works on a different subset of
+    # reasoning models — see configs/CONFIG_README.md for the matrix. Combine
+    # freely; harmless flags are just ignored by models that don't recognize them.
+    reasoning_effort: str | None = None    # sends `reasoning_effort: <value>` in request body (e.g. "none", "low")
+    prefill_no_think: bool = False         # appends an assistant message containing `<think>\n</think>\n\n`
 
 
 def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
@@ -21,6 +26,12 @@ def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": user})
+    if cfg.prefill_no_think:
+        # Pre-filling the assistant turn with an empty think block is the only
+        # technique that reliably skips CoT on Qwen3.5/3.6 — the model sees
+        # </think> and continues from there with the actual answer.
+        messages.append({"role": "assistant", "content": "<think>\n</think>\n\n"})
+
     payload = {
         "model": cfg.model,
         "messages": messages,
@@ -28,6 +39,9 @@ def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
         "max_tokens": cfg.max_tokens,
         "stream": False,
     }
+    if cfg.reasoning_effort is not None:
+        payload["reasoning_effort"] = cfg.reasoning_effort
+
     headers = {"Content-Type": "application/json"}
     if cfg.api_key:
         headers["Authorization"] = f"Bearer {cfg.api_key}"

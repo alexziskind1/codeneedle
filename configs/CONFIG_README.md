@@ -79,9 +79,11 @@ name              = "qwen3.6-35b-a3b"      # required
 base_url          = "http://localhost:1234"
 api_key           = "not-needed"
 temperature       = 0.0
-max_tokens        = 6000
+max_tokens        = 1500
 timeout           = 600.0
 suppress_thinking = true
+reasoning_effort  = "none"                  # optional
+prefill_no_think  = false                   # optional
 ```
 
 | field | required | default | meaning |
@@ -90,9 +92,34 @@ suppress_thinking = true
 | `base_url` | no | `http://localhost:1234` | OpenAI-compatible endpoint root. Common ports: llama.cpp `8080`, LM Studio `1234`, Ollama `11434`. |
 | `api_key` | no | `not-needed` | bearer token. Local servers ignore it; hosted APIs need a real value. |
 | `temperature` | no | `0.0` | keep at 0 for the benchmark — recall isn't a creative task and determinism makes results comparable. |
-| `max_tokens` | no | `6000` | completion-token budget. **Reasoning models** (qwen3.5+, o-series) need a lot — the chain-of-thought eats tokens before the answer. Rule of thumb: 1500 for non-reasoning, 6000 for "small" reasoning, 8000–12000 for big ones. If responses come back empty, this is almost always why. |
+| `max_tokens` | no | `6000` | completion-token budget. If you can disable reasoning (see below), 1500 is plenty. If you can't, you need enough headroom for the entire CoT plus the ~20-line answer — see the matrix. |
 | `timeout` | no | `600.0` | HTTP request timeout in seconds. Bump for slow CPU-only setups. |
-| `suppress_thinking` | no | `true` | appends `/no_think` to the user message. Qwen3 4B (non-reasoning) honors this; Qwen3.5+ ignores it but the marker is harmless. The CLI flag `--think` flips this off if you want to compare CoT vs no-CoT recall. |
+| `suppress_thinking` | no | `true` | appends `/no_think` to the user message. The CLI flag `--think` flips this off. See the matrix below — only some models honor it. |
+| `reasoning_effort` | no | `null` | sends `reasoning_effort: <value>` in the request body. Use `"none"` to attempt full disable; or `"low"` / `"medium"` / `"high"` (OpenAI o-series style). |
+| `prefill_no_think` | no | `false` | adds an assistant message containing `<think>\n</think>\n\n` after the user prompt. The model continues from after `</think>`, skipping CoT. |
+
+### Disabling chain-of-thought — the actual matrix
+
+Reasoning-on-by-default models burn through `max_tokens` on CoT before
+producing any output. Three escape hatches exist; **which one works depends
+on the model.** From measurement against this LM Studio build:
+
+| Model | `suppress_thinking` (`/no_think`) | `reasoning_effort = "none"` | `prefill_no_think = true` |
+|---|:---:|:---:|:---:|
+| Qwen 3 4B            | ✅ honors      | ✅ honors  | ⚠ confuses model |
+| Qwen 3.5 9B          | ❌ ignored     | ✅ honors  | ✅ honors |
+| Qwen 3.6 35B (A3B)   | ❌ ignored     | ❌ ignored | ✅ honors |
+
+Practical guide:
+- **Qwen 3 (non-reasoning)**: `suppress_thinking = true` is enough.
+- **Qwen 3.5 family**: `reasoning_effort = "none"`. `prefill_no_think` works too.
+- **Qwen 3.6 family**: `prefill_no_think = true`. The other two don't help.
+- **OpenAI o-series**: use `reasoning_effort = "low"` or `"minimal"` (the API
+  rejects `"none"`); CoT can't be fully disabled but you can shrink it.
+- **Unknown model**: probe by hand. The fields are independent and combining
+  techniques is harmless on models that ignore the unrecognized ones.
+
+When CoT is truly off, `max_tokens=1500` is plenty even for big models.
 
 ### Adding a new model
 
@@ -100,11 +127,12 @@ suppress_thinking = true
 cp configs/models/qwen36-35b.toml configs/models/llama-3.3-70b.toml
 # edit configs/models/llama-3.3-70b.toml:
 #   name = "<id from `lms ls` or /v1/models>"
-#   tune max_tokens, suppress_thinking for that model's behavior
+#   tune max_tokens / reasoning_effort / prefill_no_think for the model
 python3 bench.py run --corpus http_server --model llama-3.3-70b
 ```
 
-If the model isn't reasoning-heavy, you can drop `max_tokens` to 1500.
+If the model is non-reasoning, drop the reasoning-disable fields and use
+`max_tokens = 1500`.
 
 ### Skipping the config entirely
 

@@ -121,6 +121,8 @@ def load_model_from_file(path: Path) -> ModelConfig:
         temperature=float(raw.get("temperature", 0.0)),
         max_tokens=int(raw.get("max_tokens", 6000)),
         timeout=float(raw.get("timeout", 600.0)),
+        reasoning_effort=raw.get("reasoning_effort"),
+        prefill_no_think=bool(raw.get("prefill_no_think", False)),
     )
     return ModelConfig(
         name=path.stem,
