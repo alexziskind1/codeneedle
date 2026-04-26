@@ -19,7 +19,7 @@ Run any project script via `uv run` (no `source .venv/bin/activate` needed):
 
 ```
 uv run python bench.py run --corpus http_server --model qwen36-35b
-uv run python visualize.py
+uv run python analysis/visualize.py
 uv run python smoke_test.py
 ```
 
@@ -51,12 +51,16 @@ python3 bench.py run --corpus http_server --model qwen36-35b
 
 ```
 configs/
-  corpora/   what files to test, sample size — one TOML per corpus
-  models/    model identifier and per-model knobs — one TOML per model
-fixtures/    source files to test against (jquery.js, http_server.py, …)
-results/     JSON dumps from every run, auto-named <corpus>__<model>.json
-bench/       package internals
-bench.py     CLI entry
+  corpora/        what files to test, sample size — one TOML per corpus
+  models/         model identifier and per-model knobs — one TOML per model
+fixtures/         source files to test against (jquery.js, http_server.py, …)
+results/          JSON dumps from every run, auto-named <corpus>__<model>.json
+analysis/
+  visualize.py    Plotly dashboard builder
+  charts/         generated HTML output (gitignored)
+  VIZ_README.md   chart-by-chart explanation + how to extend
+bench/            package internals
+bench.py          CLI entry
 ```
 
 ## Configs
@@ -180,8 +184,9 @@ python3 bench.py extract --corpus http_server --show is_cgi   # ground truth
 python3 bench.py rescore results/http_server__qwen36-35b.json
 
 # Build Plotly dashboards comparing every run in results/
-python3 visualize.py
-# -> results/viz/<corpus>.html (one per corpus) + results/viz/index.html
+python3 analysis/visualize.py
+# -> analysis/charts/<corpus>.html + analysis/charts/index.html
+# (see analysis/VIZ_README.md for what each chart shows)
 ```
 
 Supported source languages: `.js`, `.mjs`, `.cjs` (esprima), `.py` (`ast`).
@@ -239,5 +244,6 @@ Keep temperature at 0. Default `max_tokens=6000` to leave room for reasoning mod
 - `bench/scorer.py` — LCS alignment, line classification, pass/fail
 - `bench/report.py` — ANSI color rendering
 - `bench/runner.py` — orchestration: prompt assembly, query, score, dump
-- `visualize.py` — builds Plotly HTML dashboards from `results/*.json`
+- `analysis/visualize.py` — builds Plotly HTML dashboards from `results/*.json`
+  (see [`analysis/VIZ_README.md`](analysis/VIZ_README.md) for chart-by-chart details)
 - `smoke_test.py` — end-to-end sanity check without an LLM

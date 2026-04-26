@@ -15,4 +15,4 @@ venv/
 
 # Benchmark outputs — each user generates their own
 results/*.json
-results/viz/
+analysis/charts/

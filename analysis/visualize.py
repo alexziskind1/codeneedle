@@ -7,7 +7,7 @@ One dashboard per corpus (grouped by the `files` field in the dump):
     2. Per-function bars    — each function's score across models
     3. Recall vs. position  — does recall fall off deeper in the file?
 
-Output: results/viz/<corpus>.html + results/viz/index.html.
+Output: analysis/charts/<corpus>.html + analysis/charts/index.html.
 """
 from __future__ import annotations
 
@@ -19,7 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parent
+# This file lives in analysis/, so REPO_ROOT is one level up.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))   # so `import bench…` works regardless of cwd
 PASS_THRESHOLD = 8    # matches bench/scorer.py
 
 # Stable color palette — assigned once per model so every chart uses the same color.
@@ -355,10 +357,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--results-dir", type=Path, default=REPO_ROOT / "results")
     ap.add_argument("--output-dir", type=Path, default=None,
-                    help="default: <results-dir>/viz")
+                    help="default: analysis/charts/")
     args = ap.parse_args(argv)
 
-    out_dir = args.output_dir or (args.results_dir / "viz")
+    out_dir = args.output_dir or (REPO_ROOT / "analysis" / "charts")
     groups = load_runs(args.results_dir)
     if not groups:
         print(f"no usable result JSON files in {args.results_dir}")
