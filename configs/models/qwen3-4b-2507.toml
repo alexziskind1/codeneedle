@@ -1,0 +1,12 @@
+# Qwen3 4B (2507 build — long-context variant). Same architecture as the
+# original qwen3-4b but with extended context support up to 256K, so it
+# actually fits the jquery corpus. Non-reasoning by default; honors
+# `/no_think` (unlike its bigger 3.5/3.6 siblings), so 1500 max_tokens
+# is plenty.
+
+name              = "qwen/qwen3-4b-2507"
+base_url          = "http://localhost:1234"
+temperature       = 0.0
+max_tokens        = 1500
+timeout           = 600.0
+suppress_thinking = true

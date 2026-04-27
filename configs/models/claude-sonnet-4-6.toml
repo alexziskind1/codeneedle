@@ -1,0 +1,17 @@
+# Anthropic Claude Sonnet 4.6 (hosted). Anthropic exposes an OpenAI-compatible
+# `/v1/chat/completions` shim, so the same client code works — just point at
+# api.anthropic.com and use a Bearer token.
+#
+# Sonnet has extended-thinking support but it's off by default through this
+# shim. The benchmark doesn't need it (recall isn't a reasoning task), so
+# leave it off.
+
+name              = "claude-sonnet-4-6"
+base_url          = "https://api.anthropic.com"
+api_key_file      = ".secrets/anthropic.key"
+temperature       = 0.0
+max_tokens        = 8000
+timeout           = 600.0
+suppress_thinking = false       # /no_think is meaningless to Anthropic
+# reasoning_effort / prefill_no_think — leave unset; thinking is off by default.
+# use_max_completion_tokens — Anthropic accepts the standard `max_tokens`.

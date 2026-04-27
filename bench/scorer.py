@@ -40,13 +40,23 @@ def score(
     primary: list[str],
     bonus: list[str],
     predicted_text: str,
+    relax_indent: bool = False,
 ) -> FunctionScore:
-    predicted = _clean_output(predicted_text)
+    """Score a single function's predicted output against expected lines.
 
-    exp_primary = [_norm(l) for l in primary]
-    exp_bonus = [_norm(l) for l in bonus]
+    `relax_indent=True` normalizes both sides with `.strip()` instead of
+    `.rstrip()` only — i.e. leading whitespace is ignored when matching. Use
+    this for models like Gemma that emit semantically-correct code but
+    normalize indentation, where strict verbatim matching would unfairly
+    penalize content the model actually got right. Default is strict.
+    """
+    predicted = _clean_output(predicted_text)
+    norm = _norm_relaxed if relax_indent else _norm
+
+    exp_primary = [norm(l) for l in primary]
+    exp_bonus = [norm(l) for l in bonus]
     exp_full = exp_primary + exp_bonus
-    pred = [_norm(l) for l in predicted]
+    pred = [norm(l) for l in predicted]
 
     # trim trailing blank lines on prediction (common model artifact)
     while pred and pred[-1] == "":
@@ -78,10 +88,22 @@ def score(
         1 for i, k in enumerate(pred_kind) if k == -1 and pred[i].strip() == ""
     )
 
+    # Display the ORIGINAL lines (with their actual indentation), not the
+    # normalized form used for matching. Otherwise indent-relaxed scoring
+    # would render every line lstripped, hiding the model's real output.
+    expected_display = [l.rstrip() for l in primary]
+    pred_display = [l.rstrip() for l in _clean_output(predicted_text)]
+    while pred_display and pred_display[-1] == "":
+        pred_display.pop()
+    if len(pred_display) != len(pred):
+        # Defensive: alignment of pred_display to pred should match because
+        # both started from the same _clean_output and stripped trailing blanks.
+        pred_display = pred_display[: len(pred)] + [""] * max(0, len(pred) - len(pred_display))
+
     expected_tagged = [
         LineResult(
             LineTag.MATCHED if matched_exp[i] else LineTag.MISSING,
-            exp_primary[i],
+            expected_display[i],
         )
         for i in range(len(exp_primary))
     ]
@@ -91,7 +113,7 @@ def score(
         -1: LineTag.HALLUCINATED,
     }
     predicted_tagged = [
-        LineResult(kind_to_tag[pred_kind[i]], pred[i]) for i in range(len(pred))
+        LineResult(kind_to_tag[pred_kind[i]], pred_display[i]) for i in range(len(pred))
     ]
 
     return FunctionScore(
@@ -109,6 +131,12 @@ def score(
 def _norm(s: str) -> str:
     # Preserve leading indentation; strip trailing whitespace (models are inconsistent there).
     return s.rstrip()
+
+
+def _norm_relaxed(s: str) -> str:
+    # Used when scoring indent-blind. Strips both leading and trailing whitespace.
+    # Internal whitespace is preserved so things like `a    b` stay distinct from `a b`.
+    return s.strip()
 
 
 def _clean_output(text: str) -> list[str]:

@@ -20,5 +20,11 @@ suppress_thinking = true        # appends /no_think; harmless when ignored
 # answering, burning the rest of max_tokens on copies of "---\nTask:\nRules:".
 # These stop sequences cut the response off at the natural answer boundary.
 stop              = ["\n---", "\nTask:", "\nRules:"]
+# Gemma 4 normalizes leading whitespace — strips tabs and spaces from the
+# emitted lines regardless of the source's actual indent. Strict verbatim
+# scoring punishes this even though the content is correct (a programmer
+# would just re-indent the output through prettier/black). Score by content,
+# not whitespace.
+relax_indent      = true
 # reasoning_effort / prefill_no_think — leave unset; only relevant for
 # reasoning-on-by-default models like Qwen3.5+.

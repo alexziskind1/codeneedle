@@ -143,6 +143,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         DEFAULT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         dump_path = auto_dump_path(synthetic_corpus, model, DEFAULT_RESULTS_DIR)
 
+    # Indent-tolerant scoring: take from model config, allow CLI overrides in either direction.
+    relax_indent = model.relax_indent
+    if args.relax_indent:
+        relax_indent = True
+    if args.strict_indent:
+        relax_indent = False
+
     fn_filter = args.function if args.function else None
     scores = run_benchmark(
         source=source,
@@ -154,6 +161,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         suppress_thinking=suppress_thinking,
         skip_preflight=args.skip_preflight,
         fail_fast_after=None if args.no_fail_fast else args.fail_fast_after,
+        relax_indent=relax_indent,
     )
     passed = sum(1 for s in scores if s.passed)
     return 0 if passed == len(scores) else 1
@@ -189,6 +197,13 @@ def cmd_rescore(args: argparse.Namespace) -> int:
                 "pass --corpus NAME or --file PATH to re-locate it"
             )
 
+    # Honor original dump's relax_indent unless overridden on the CLI.
+    relax_indent = bool(dump.get("relax_indent", False))
+    if args.relax_indent:
+        relax_indent = True
+    if args.strict_indent:
+        relax_indent = False
+
     targets = {t.name: t for t in source.targets}
     scores = []
     for r in dump["results"]:
@@ -196,11 +211,16 @@ def cmd_rescore(args: argparse.Namespace) -> int:
         if t is None:
             print(f"skip: {r['function']} not found in source", file=sys.stderr)
             continue
-        sc = score(t.name, t.primary_lines, t.bonus_lines, r.get("response", ""))
+        sc = score(
+            t.name, t.primary_lines, t.bonus_lines,
+            r.get("response", ""), relax_indent=relax_indent,
+        )
         if r.get("error"):
             sc.error = r["error"]
         scores.append(sc)
         print(render_function(sc))
+    if relax_indent:
+        print("\n(scored with relax_indent=true — leading whitespace ignored on both sides)")
     print(render_summary(scores))
     return 0
 
@@ -257,6 +277,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-fail-fast", action="store_true",
         help="disable fail-fast; run every query even if they're all erroring",
     )
+    p_run.add_argument(
+        "--relax-indent", action="store_true",
+        help="ignore leading whitespace when matching (overrides model config to true)",
+    )
+    p_run.add_argument(
+        "--strict-indent", action="store_true",
+        help="enforce verbatim indentation (overrides model config to false)",
+    )
     p_run.set_defaults(func=cmd_run)
 
     # --- rescore ------------------------------------------------------------
@@ -265,6 +293,14 @@ def build_parser() -> argparse.ArgumentParser:
     src_grp = p_rs.add_mutually_exclusive_group()
     src_grp.add_argument("--corpus", help="re-locate corpus via this config")
     src_grp.add_argument("--file", help="re-locate corpus from a single file")
+    p_rs.add_argument(
+        "--relax-indent", action="store_true",
+        help="ignore leading whitespace when matching (overrides dump's setting)",
+    )
+    p_rs.add_argument(
+        "--strict-indent", action="store_true",
+        help="enforce verbatim indentation (overrides dump's setting)",
+    )
     p_rs.set_defaults(func=cmd_rescore)
 
     return p

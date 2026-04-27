@@ -61,7 +61,8 @@ class CorpusConfig:
 class ModelConfig:
     name: str            # config stem, used in result filename
     client: ClientConfig
-    suppress_thinking: bool
+    suppress_thinking: bool = True
+    relax_indent: bool = False    # score with leading-whitespace ignored on both sides — for models that strip indentation (Gemma 4)
 
 
 # --- resolution -----------------------------------------------------------
@@ -165,6 +166,7 @@ def load_model_from_file(path: Path) -> ModelConfig:
         name=path.stem,
         client=client,
         suppress_thinking=bool(raw.get("suppress_thinking", True)),
+        relax_indent=bool(raw.get("relax_indent", False)),
     )
 
 

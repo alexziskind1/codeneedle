@@ -87,15 +87,19 @@ def _preflight_context_check(prompt: str, cfg: ClientConfig) -> str | None:
     no real generation happens — the model only ingests the prompt and emits
     a single token. As a side benefit it warms the server's prefix KV cache
     for the rest of the run.
+
+    Inherits the full request shape from `cfg` (so flags like
+    `use_max_completion_tokens`, `reasoning_effort`, `prefill_no_think`,
+    and `stop` apply) — otherwise the probe and the real queries would hit
+    different server-side validation paths.
+
+    `max_tokens=16` (not 1): some hosted APIs reject very small budgets
+    with "Could not finish the message" before even processing the prompt.
+    16 is still negligible cost-wise and finishes in a fraction of a second.
     """
-    probe_cfg = ClientConfig(
-        base_url=cfg.base_url,
-        model=cfg.model,
-        api_key=cfg.api_key,
-        temperature=0.0,
-        max_tokens=1,
-        timeout=cfg.timeout,
-    )
+    from dataclasses import replace
+
+    probe_cfg = replace(cfg, max_tokens=16)
     try:
         chat_complete(probe_cfg, system=None, user=prompt)
         return None
@@ -118,6 +122,7 @@ def run_benchmark(
     suppress_thinking: bool = True,
     skip_preflight: bool = False,
     fail_fast_after: int | None = 2,
+    relax_indent: bool = False,
 ) -> list[FunctionScore]:
     text = source.text
     total_lines = text.count("\n") + 1
@@ -211,7 +216,7 @@ def run_benchmark(
             )
             print(f"  ⚠ {score_error}", flush=True)
 
-        sc = score(t.name, t.primary_lines, t.bonus_lines, resp)
+        sc = score(t.name, t.primary_lines, t.bonus_lines, resp, relax_indent=relax_indent)
         if score_error:
             sc.error = score_error
         scores.append(sc)
@@ -262,6 +267,9 @@ def run_benchmark(
             )
             break
 
+    if relax_indent:
+        print("\n(scored with relax_indent=true — leading whitespace ignored on both sides)",
+              flush=True)
     print(render_summary(scores), flush=True)
 
     if dump_path:
@@ -272,6 +280,7 @@ def run_benchmark(
             "base_url": cfg.base_url,
             "temperature": cfg.temperature,
             "max_tokens": cfg.max_tokens,
+            "relax_indent": relax_indent,
             "results": [
                 {
                     "function": sc.name,

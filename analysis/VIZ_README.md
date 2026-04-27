@@ -14,12 +14,30 @@ python3 analysis/visualize.py
 ```
 
 Reads every `results/*.json`, groups runs by their corpus (the `files` field
-in each dump), and writes one dashboard HTML per corpus to `analysis/charts/`.
-Then opens with:
+in each dump), and writes **one chart per HTML page** under
+`analysis/charts/<corpus>/`:
+
+```
+analysis/charts/
+  index.html                      ← top-level: links per corpus
+  http_server/
+    index.html                    ← corpus dashboard with chart links
+    leaderboard.html              ← chart 1 standalone
+    per-function.html             ← chart 2 standalone
+    recall-vs-position.html       ← chart 3 standalone
+  jquery/
+    …same shape…
+```
+
+Open with:
 
 ```
 open analysis/charts/index.html
 ```
+
+Each chart page is fully self-contained (Plotly loaded from CDN). Pages share
+a small horizontal nav at the top so you can jump between charts of the same
+corpus without going back to the index.
 
 ### Options
 
@@ -34,8 +52,14 @@ Re-run any time. It overwrites the HTML; nothing is incremental.
 
 ## What each chart shows
 
-Every dashboard has three sections, each answering one question. Models get
-a stable color across all charts so you can track them visually.
+Three charts per corpus, one chart per page. Models get a stable color across
+every chart of a corpus, and **every chart is fully interactive**:
+
+- hover over any data point for details
+- click a model in the legend to hide/show it
+- double-click a model to isolate it
+- box-select / lasso to zoom; double-click empty space to reset
+- the legend is on the right side and sized so up to 20 models fit cleanly
 
 ### 1. Leaderboard
 
@@ -82,8 +106,8 @@ you need ~80K+ tokens in the prompt: run the `jquery` corpus.
 Runs are grouped by **corpus**, not model. The grouping key is the set of
 file basenames in the dump's `files` field. So:
 
-- All runs against `fixtures/http_server.py` → `analysis/charts/http_server.html`
-- All runs against `fixtures/jquery.js` → `analysis/charts/jquery.html`
+- All runs against `fixtures/http_server.py` → `analysis/charts/http_server/`
+- All runs against `fixtures/jquery.js` → `analysis/charts/jquery/`
 - A run against `fixtures/foo.py + fixtures/bar.py` → its own group
 
 Within a dashboard, each run shows up as its own colored line / bar even if
