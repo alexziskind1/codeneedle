@@ -1,0 +1,16 @@
+# Qwen3.6 27B (4-bit MLX, Apple Silicon native). Same family as qwen36-35b
+# and qwen36-27b-mlx, so the same reasoning-disable applies: `prefill_no_think`
+# is the working technique. With CoT skipped, max_tokens=1500 is plenty.
+#
+# 4-bit MLX is fast on Apple Silicon — much quicker than the bf16/full-precision
+# MLX sibling — at the usual quantization-quality tradeoff. The video author
+# noted recall fidelity differs across quant builds, so this is worth comparing
+# directly to qwen36-27b-mlx.
+
+name              = "qwen3.6-27b"
+base_url          = "http://localhost:1234"
+temperature       = 0.0
+max_tokens        = 1500
+timeout           = 600.0
+prefill_no_think  = true    # the only technique that reliably skips CoT on qwen3.6
+suppress_thinking = true    # appends /no_think; harmless when ignored

@@ -85,18 +85,24 @@ suppress_thinking = true
 reasoning_effort  = "none"                  # optional
 prefill_no_think  = false                   # optional
 stop              = ["\n---", "\nTask:"]    # optional
+api_key_file      = ".secrets/openai.key"   # optional, hosted models
+api_key_env       = "OPENAI_API_KEY"        # optional, hosted models
+use_max_completion_tokens = true            # optional, OpenAI GPT-5+
 ```
 
 | field | required | default | meaning |
 |---|---|---|---|
 | `name` | yes | — | the model identifier the **server** knows it by (what `lms ls` shows or what `/v1/models` returns). Doesn't have to match the file's stem. |
-| `base_url` | no | `http://localhost:1234` | OpenAI-compatible endpoint root. Common ports: llama.cpp `8080`, LM Studio `1234`, Ollama `11434`. |
-| `api_key` | no | `not-needed` | bearer token. Local servers ignore it; hosted APIs need a real value. |
-| `temperature` | no | `0.0` | keep at 0 for the benchmark — recall isn't a creative task and determinism makes results comparable. |
+| `base_url` | no | `http://localhost:1234` | OpenAI-compatible endpoint root. Common ports: llama.cpp `8080`, LM Studio `1234`, Ollama `11434`. Hosted: `https://api.openai.com`. |
+| `api_key` | no | `not-needed` | bearer token (literal value). Use **only** for non-secret tokens like local-server placeholders. For real keys see *Hosted models* below. |
+| `api_key_file` | no | — | path to a file containing the key. Resolved relative to repo root if not absolute. **Use this for hosted-API keys** — see *Hosted models* below. Takes precedence over `api_key_env` and `api_key`. |
+| `api_key_env` | no | — | environment variable name to read. Resolved at config-load time; errors if unset. Takes precedence over `api_key`. |
+| `temperature` | no | `0.0` | keep at 0 for the benchmark. Some hosted reasoning models (OpenAI o-series, GPT-5.x) require `1.0` and reject other values. |
 | `max_tokens` | no | `6000` | completion-token budget. If you can disable reasoning (see below), 1500 is plenty. If you can't, you need enough headroom for the entire CoT plus the ~20-line answer — see the matrix. |
+| `use_max_completion_tokens` | no | `false` | when `true`, sends `max_completion_tokens` in the request body instead of `max_tokens`. Required for OpenAI GPT-5 family — they reject the older parameter name. |
 | `timeout` | no | `600.0` | HTTP request timeout in seconds. Bump for slow CPU-only setups. |
 | `suppress_thinking` | no | `true` | appends `/no_think` to the user message. The CLI flag `--think` flips this off. See the matrix below — only some models honor it. |
-| `reasoning_effort` | no | `null` | sends `reasoning_effort: <value>` in the request body. Use `"none"` to attempt full disable; or `"low"` / `"medium"` / `"high"` (OpenAI o-series style). |
+| `reasoning_effort` | no | `null` | sends `reasoning_effort: <value>` in the request body. Values vary by model: Qwen accepts `"none"` (or anything; usually ignored). OpenAI GPT-5 accepts `"none"` / `"low"` / `"medium"` / `"high"` / `"xhigh"` but rejects `"minimal"`. OpenAI o-series accepts `"low"` / `"medium"` / `"high"` only. |
 | `prefill_no_think` | no | `false` | adds an assistant message containing `<think>\n</think>\n\n` after the user prompt. The model continues from after `</think>`, skipping CoT. |
 | `stop` | no | `null` | list of stop sequences sent to the server. Useful for models that **parrot the prompt back** after answering (Gemma 4 does this on every query). Pick strings that appear in your prompt boilerplate but not in real code — `"\n---"`, `"\nTask:"`, `"\nRules:"` are good defaults. |
 
@@ -142,6 +148,77 @@ If the model is non-reasoning, drop the reasoning-disable fields and use
 exists, FOO is treated as a raw model identifier with the defaults above —
 useful for one-off runs but not great for repeated comparisons (you'd be
 re-typing the per-model knobs).
+
+### Hosted models — API keys and security
+
+For hosted endpoints (OpenAI, Anthropic, Together, Groq, …) you need to
+authenticate with a real bearer token. **Don't put it in the model config
+file directly** — `configs/` is committed; that would leak the key. Use one
+of two indirections:
+
+#### Option 1 (recommended): a key file under `.secrets/`
+
+```
+mkdir -p .secrets && chmod 700 .secrets
+echo 'sk-proj-...' > .secrets/openai.key
+chmod 600 .secrets/openai.key
+```
+
+Then in the model config:
+
+```toml
+api_key_file = ".secrets/openai.key"
+```
+
+The path is resolved relative to the repo root if not absolute. The file's
+contents are read and stripped (trailing whitespace removed) once at
+config-load time. The `.secrets/` folder, plus any `*.key` file, is already
+in `.gitignore` so the key can't be accidentally committed.
+
+#### Option 2: an environment variable
+
+```
+export OPENAI_API_KEY=sk-proj-...
+```
+
+Then in the model config:
+
+```toml
+api_key_env = "OPENAI_API_KEY"
+```
+
+Useful when keys are managed by your shell, direnv, a secret manager, or CI.
+
+#### Verifying it's gitignored
+
+```
+git check-ignore -v .secrets/openai.key
+# .gitignore:17:.secrets/   .secrets/openai.key
+```
+
+If you don't see a hit, your `.gitignore` is wrong — fix it before committing.
+
+#### Hosted-model gotchas (observed)
+
+| API | Quirk | Config workaround |
+|---|---|---|
+| OpenAI GPT-5 family | Rejects `max_tokens`; needs `max_completion_tokens` | `use_max_completion_tokens = true` |
+| OpenAI GPT-5.5 | `reasoning_effort = "minimal"` rejected; `"none"` works | `reasoning_effort = "none"` |
+| OpenAI o-series | Often forces `temperature = 1.0`; rejects `0.0` | `temperature = 1.0` |
+
+### Example hosted-model config
+
+```toml
+# configs/models/gpt-5.5.toml
+name              = "gpt-5.5"
+base_url          = "https://api.openai.com"
+api_key_file      = ".secrets/openai.key"
+temperature       = 1.0
+max_tokens        = 8000
+reasoning_effort  = "none"
+suppress_thinking = false
+use_max_completion_tokens = true
+```
 
 ---
 

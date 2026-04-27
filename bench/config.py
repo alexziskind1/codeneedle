@@ -110,6 +110,37 @@ def load_corpus(name_or_path: str | Path) -> CorpusConfig:
 # --- model ----------------------------------------------------------------
 
 
+def _resolve_api_key(raw: dict, config_path: Path) -> str:
+    """Resolve the API key from one of three sources, in priority order:
+
+    1. `api_key_file` — path to a file containing the key (recommended for
+       hosted services; put the file under `.secrets/` and gitignore the dir).
+    2. `api_key_env`  — environment variable name to read.
+    3. `api_key`      — literal value in the config (only for non-secret tokens
+       like LM Studio's "not-needed").
+    """
+    import os
+
+    if "api_key_file" in raw:
+        key_path = Path(raw["api_key_file"]).expanduser()
+        if not key_path.is_absolute():
+            key_path = REPO_ROOT / key_path
+        if not key_path.is_file():
+            raise FileNotFoundError(
+                f"{config_path}: api_key_file '{key_path}' not found"
+            )
+        return key_path.read_text().strip()
+    if "api_key_env" in raw:
+        env_name = raw["api_key_env"]
+        val = os.environ.get(env_name)
+        if not val:
+            raise ValueError(
+                f"{config_path}: api_key_env '{env_name}' is not set in the current environment"
+            )
+        return val
+    return raw.get("api_key", "not-needed")
+
+
 def load_model_from_file(path: Path) -> ModelConfig:
     raw = tomllib.loads(path.read_text())
     if "name" not in raw:
@@ -117,16 +148,18 @@ def load_model_from_file(path: Path) -> ModelConfig:
     stop_raw = raw.get("stop")
     if stop_raw is not None and not isinstance(stop_raw, list):
         raise ValueError(f"{path}: `stop` must be a list of strings if set")
+    api_key = _resolve_api_key(raw, path)
     client = ClientConfig(
         base_url=raw.get("base_url", "http://localhost:1234"),
         model=raw["name"],
-        api_key=raw.get("api_key", "not-needed"),
+        api_key=api_key,
         temperature=float(raw.get("temperature", 0.0)),
         max_tokens=int(raw.get("max_tokens", 6000)),
         timeout=float(raw.get("timeout", 600.0)),
         reasoning_effort=raw.get("reasoning_effort"),
         prefill_no_think=bool(raw.get("prefill_no_think", False)),
         stop=stop_raw,
+        use_max_completion_tokens=bool(raw.get("use_max_completion_tokens", False)),
     )
     return ModelConfig(
         name=path.stem,

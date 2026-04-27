@@ -59,6 +59,7 @@ analysis/
   visualize.py    Plotly dashboard builder
   charts/         generated HTML output (gitignored)
   VIZ_README.md   chart-by-chart explanation + how to extend
+.secrets/         API keys for hosted endpoints (gitignored, perms 700)
 bench/            package internals
 bench.py          CLI entry
 ```
@@ -68,6 +69,39 @@ bench.py          CLI entry
 The split is by axis-of-change. You rarely change which files to test, but
 you constantly compare different models — so an N×M comparison needs only
 N+M files, not N*M.
+
+### Hosted models — API keys
+
+Don't put real keys in committed config files. The recommended workflow:
+
+```bash
+mkdir -p .secrets && chmod 700 .secrets
+echo 'sk-...' > .secrets/openai.key
+chmod 600 .secrets/openai.key
+```
+
+Then reference it from a model config:
+
+```toml
+# configs/models/gpt-5.5.toml
+name              = "gpt-5.5"
+base_url          = "https://api.openai.com"
+api_key_file      = ".secrets/openai.key"   # path resolved from repo root
+temperature       = 1.0
+max_tokens        = 8000
+reasoning_effort  = "none"
+use_max_completion_tokens = true
+```
+
+`.secrets/` and any `*.key` file are already in `.gitignore`. Verify with
+`git check-ignore -v .secrets/openai.key` — you should see a match.
+
+Alternatives: `api_key_env = "OPENAI_API_KEY"` (read from environment), or
+`api_key = "..."` (literal — only for non-secret tokens like LM Studio's
+`"not-needed"` placeholder).
+
+Full hosted-model details and known per-API quirks:
+[`configs/CONFIG_README.md → Hosted models`](configs/CONFIG_README.md#hosted-models--api-keys-and-security).
 
 > Field-by-field reference for every TOML key, plus recipes for adding a new
 > corpus or model, lives in [`configs/CONFIG_README.md`](configs/CONFIG_README.md).

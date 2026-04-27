@@ -13,6 +13,10 @@ venv/
 # Runtime artifacts
 *.log
 
+# API keys and other secrets — NEVER commit
+.secrets/
+*.key
+
 # Benchmark outputs — each user generates their own
 results/*.json
 analysis/charts/

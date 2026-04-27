@@ -1,0 +1,17 @@
+# OpenAI GPT-5.5 (hosted). Reasoning model — like o-series, the only API
+# knob to constrain CoT is `reasoning_effort`. OpenAI rejects "none" and
+# typically requires temperature=1 for reasoning models, so the usual
+# benchmark constants don't all apply here.
+#
+# Auth: API key is read from .secrets/openai.key (gitignored). To use a
+# different OpenAI account, swap the file or set api_key_env = "OPENAI_API_KEY".
+
+name              = "gpt-5.5"
+base_url          = "https://api.openai.com"
+api_key_file      = ".secrets/openai.key"
+temperature       = 1.0
+max_tokens        = 8000
+timeout           = 600.0
+reasoning_effort  = "none"           # GPT-5.5 actually accepts "none" — fully skips CoT
+suppress_thinking = false            # /no_think marker is meaningless to OpenAI
+use_max_completion_tokens = true     # GPT-5 family rejects max_tokens; uses the new name

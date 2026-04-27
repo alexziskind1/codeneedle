@@ -20,6 +20,7 @@ class ClientConfig:
     reasoning_effort: str | None = None    # sends `reasoning_effort: <value>` in request body (e.g. "none", "low")
     prefill_no_think: bool = False         # appends an assistant message containing `<think>\n</think>\n\n`
     stop: list[str] | None = None          # stop sequences sent to the server; useful for models that parrot the prompt back (Gemma 4)
+    use_max_completion_tokens: bool = False  # send `max_completion_tokens` instead of `max_tokens` (required by OpenAI GPT-5 family)
 
 
 def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
@@ -37,9 +38,12 @@ def chat_complete(cfg: ClientConfig, system: str | None, user: str) -> str:
         "model": cfg.model,
         "messages": messages,
         "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
         "stream": False,
     }
+    if cfg.use_max_completion_tokens:
+        payload["max_completion_tokens"] = cfg.max_tokens
+    else:
+        payload["max_tokens"] = cfg.max_tokens
     if cfg.reasoning_effort is not None:
         payload["reasoning_effort"] = cfg.reasoning_effort
     if cfg.stop:
