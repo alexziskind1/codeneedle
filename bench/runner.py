@@ -202,7 +202,11 @@ def run_benchmark(
             print(f"  ERROR: {request_error}", flush=True)
             resp = ""
         latency = time.monotonic() - start
-        print(f"  response: {len(resp)} chars in {latency:.1f}s", flush=True)
+        if resp is None:
+            print(f"  response: None in {latency:.1f}s", flush=True)
+            resp = ""
+        else:
+            print(f"  response: {len(resp)} chars in {latency:.1f}s", flush=True)
 
         # Empty content with no exception = HTTP 200 but the model produced
         # nothing. On reasoning models that's typically the CoT eating the
