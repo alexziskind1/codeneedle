@@ -5,6 +5,8 @@ stuff a large source corpus into an LLM's context, then ask it to reproduce
 the first N lines of specific named functions verbatim. Measures positional
 recall under long context, not just named-entity lookup.
 
+[video walkthough](https://youtu.be/zBYfzecY5ww)
+
 ## Install
 
 This project uses [uv](https://docs.astral.sh/uv/) for Python environment management.
