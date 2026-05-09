@@ -1,0 +1,15 @@
+# Anthropic Claude Opus 4.7 — frontier flagship, April 2026.
+# Uses the OpenAI-compatible shim (api.anthropic.com), same client code as Sonnet.
+#
+# Pricing note: Opus 4.7 is 5x Sonnet ($5/$25 vs $3/$15 per 1M tokens).
+# About $7 per jquery run without prompt caching. Budget accordingly: 1-2 runs.
+
+name              = "claude-opus-4-7"
+base_url          = "https://api.anthropic.com"
+api_key_file      = ".secrets/anthropic.key"
+temperature       = 0.0
+omit_temperature  = true            # Opus 4.7 deprecated `temperature` and rejects requests that include it
+max_tokens        = 1500
+timeout           = 600.0
+suppress_thinking = false
+relax_indent      = true

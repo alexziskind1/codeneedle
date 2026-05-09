@@ -161,6 +161,7 @@ def load_model_from_file(path: Path) -> ModelConfig:
         prefill_no_think=bool(raw.get("prefill_no_think", False)),
         stop=stop_raw,
         use_max_completion_tokens=bool(raw.get("use_max_completion_tokens", False)),
+        omit_temperature=bool(raw.get("omit_temperature", False)),
     )
     return ModelConfig(
         name=path.stem,

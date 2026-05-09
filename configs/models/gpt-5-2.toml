@@ -1,0 +1,16 @@
+# OpenAI GPT-5.2 — general-purpose chat model, December 2025 (newest available on Tier 1).
+# Counterpart to qwen3.6:27b-mxfp8 (general variant) on the cloud side.
+#
+# GPT-5.2 is reasoning-on-by-default — temperature must be 1.0, and
+# `reasoning_effort = "none"` is the GPT-5-family escape hatch that skips CoT.
+
+name                       = "gpt-5.2"
+base_url                   = "https://api.openai.com"
+api_key_file               = ".secrets/openai.key"
+temperature                = 1.0
+max_tokens                 = 4000            # conservative budget for any leaked-through reasoning
+timeout                    = 600.0
+reasoning_effort           = "none"          # skip CoT on the GPT-5 family
+suppress_thinking          = false
+use_max_completion_tokens  = true
+relax_indent               = true
