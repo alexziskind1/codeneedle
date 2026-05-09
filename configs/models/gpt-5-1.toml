@@ -1,0 +1,14 @@
+# OpenAI GPT-5.1 — general-purpose chat model, November 2025.
+# OpenAI mainstream frontier, counterpart to Claude Sonnet 4.6.
+# Not reasoning-by-default (unlike GPT-5.2/5.5), but temperature=1.0 is still
+# required by the GPT-5 family.
+
+name                       = "gpt-5.1"
+base_url                   = "https://api.openai.com"
+api_key_file               = ".secrets/openai.key"
+temperature                = 1.0
+max_tokens                 = 1500
+timeout                    = 300.0
+suppress_thinking          = false
+use_max_completion_tokens  = true            # required by the GPT-5 family
+relax_indent               = true

@@ -10,8 +10,9 @@ name              = "claude-sonnet-4-6"
 base_url          = "https://api.anthropic.com"
 api_key_file      = ".secrets/anthropic.key"
 temperature       = 0.0
-max_tokens        = 8000
+max_tokens        = 1500        # 20-line answer doesn't need 8k — keeps cost down
 timeout           = 600.0
 suppress_thinking = false       # /no_think is meaningless to Anthropic
-# reasoning_effort / prefill_no_think — leave unset; thinking is off by default.
+relax_indent      = true        # consistent with the local MLX configs that ship the same flag
+# reasoning_effort / prefill_no_think — leave unset; extended thinking is off-by-default through the OpenAI shim anyway.
 # use_max_completion_tokens — Anthropic accepts the standard `max_tokens`.
