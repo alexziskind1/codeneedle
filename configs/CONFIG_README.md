@@ -100,6 +100,7 @@ use_max_completion_tokens = true            # optional, OpenAI GPT-5+
 | `temperature` | no | `0.0` | keep at 0 for the benchmark. Some hosted reasoning models (OpenAI o-series, GPT-5.x) require `1.0` and reject other values. |
 | `max_tokens` | no | `6000` | completion-token budget. If you can disable reasoning (see below), 1500 is plenty. If you can't, you need enough headroom for the entire CoT plus the ~20-line answer — see the matrix. |
 | `use_max_completion_tokens` | no | `false` | when `true`, sends `max_completion_tokens` in the request body instead of `max_tokens`. Required for OpenAI GPT-5 family — they reject the older parameter name. |
+| `omit_temperature` | no | `false` | when `true`, the `temperature` field is **not** sent in the request payload. Required for Claude Opus 4.7+, which deprecated the parameter and rejects requests that include it. Leave at default (`false`) for everything else. |
 | `timeout` | no | `600.0` | HTTP request timeout in seconds. Bump for slow CPU-only setups. |
 | `suppress_thinking` | no | `true` | appends `/no_think` to the user message. The CLI flag `--think` flips this off. See the matrix below — only some models honor it. |
 | `reasoning_effort` | no | `null` | sends `reasoning_effort: <value>` in the request body. Values vary by model: Qwen accepts `"none"` (or anything; usually ignored). OpenAI GPT-5 accepts `"none"` / `"low"` / `"medium"` / `"high"` / `"xhigh"` but rejects `"minimal"`. OpenAI o-series accepts `"low"` / `"medium"` / `"high"` only. |
@@ -205,6 +206,8 @@ If you don't see a hit, your `.gitignore` is wrong — fix it before committing.
 | OpenAI GPT-5 family | Rejects `max_tokens`; needs `max_completion_tokens` | `use_max_completion_tokens = true` |
 | OpenAI GPT-5.5 | `reasoning_effort = "minimal"` rejected; `"none"` works | `reasoning_effort = "none"` |
 | OpenAI o-series | Often forces `temperature = 1.0`; rejects `0.0` | `temperature = 1.0` |
+| Claude Opus 4.7+ | Deprecated `temperature`; rejects requests that include it | `omit_temperature = true` |
+| Hosted (any) — low-tier rate limits | TPM caps abort multi-call benchmarks | client retries 429 with `Retry-After` / exp-backoff (built in, no config needed) |
 
 ### Example hosted-model config
 
