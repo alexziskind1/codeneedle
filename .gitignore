@@ -13,6 +13,7 @@ venv/
 
 # Runtime artifacts
 *.log
+.bash_history
 
 # API keys and other secrets — NEVER commit
 .secrets/

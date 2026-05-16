@@ -33,6 +33,18 @@ python3 bench.py run --corpus http_server --model qwen36-35b
 The rest of this README writes commands as `python3 …` for brevity — prepend
 `uv run ` if your venv isn't active.
 
+## Docker (Optional)
+
+Start interactive bash session with all dependencies already pre-installed
+
+```sh
+docker compose run --rm app
+```
+
+Now you can use ether `uv run` or `python` directly
+
+Close interactive shell by pressing `CTRL-d` or typing `exit` plus `RETURN`
+
 ## Quick start
 
 ```
