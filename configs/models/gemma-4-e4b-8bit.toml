@@ -1,0 +1,18 @@
+# Gemma 4 E4B (8-bit quant).
+#
+
+name              = "google/gemma-4-e4b"
+base_url          = "http://localhost:1234"
+# if you are using a devcontainer:
+# base_url          = "http://host.docker.internal:1234"
+temperature       = 0.0
+max_tokens        = 2000        # ~50 lines of code; plenty for the 20-line task
+timeout           = 600.0       # 4-bit is roughly 4× faster to ingest than bf16
+suppress_thinking = true        # appends /no_think; harmless when ignored
+# Gemma 4 parrots the prompt back after answering — cut it off before that.
+stop              = ["\n---", "\nTask:", "\nRules:"]
+# Gemma 4 normalizes leading whitespace; the content is correct but verbatim
+# matching unfairly penalizes it. Score by content (a programmer would just
+# reformat the output anyway).
+relax_indent      = true
+# reasoning_effort / prefill_no_think — leave unset; Gemma is non-reasoning.
