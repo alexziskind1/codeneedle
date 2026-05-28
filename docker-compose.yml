@@ -1,15 +1,7 @@
 services:
-  app:
-    build:
-      context: .
-      target: executor
-    hostname: infra
-    stdin_open: true
-    tty: true
-    working_dir: /app
+  codeneedle:
+    build: .
+    image: codeneedle:latest
     volumes:
-      - "${PWD:-./}:/app"
-    environment:
-      - HISTSIZE=-1
-      - HISTFILESIZE=-1
+      - ./results:/app/results
     network_mode: host

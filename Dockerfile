@@ -1,31 +1,24 @@
-FROM python:3.14-alpine AS executor
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
-RUN apk --no-cache add \
-      envsubst \
-      shadow \
-      uv \
-      bash
-RUN useradd -m admin
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY requirements.txt /tmp/requirements.txt
-RUN uv pip install --system -r /tmp/requirements.txt
+FROM python:3.13-slim
 
-ENV RUN_CMD="bash"
+WORKDIR /app
 
-ENTRYPOINT ["sh", "-c", "\
-    if [ $0 != sh ] || [ $# -gt 0 ];then \
-        export RUN_CMD=\"$0 $@\"; \
-    fi; \
-    if [ $(stat -c '%u' /app) -eq 0 ]; then \
-        ${RUN_CMD}; \
-    else \
-        groupmod -g $(stat -c '%u' /app) admin; \
-        usermod -u $(stat -c '%u' /app) -g $(stat -c '%u' /app) admin; \
-        ln -s /app/.bash_history /home/admin/.bash_history; \
-        chown admin:admin /home/admin; \
-        su admin -c '${RUN_CMD}'; \
-    fi \
-    "]
-CMD []
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+COPY bench/ bench/
+COPY bench.py run-missing.py smoke_test.py ./
+COPY configs/ configs/
+COPY fixtures/ fixtures/
+COPY analysis/ analysis/
+
+RUN mkdir -p results
+
+ENTRYPOINT ["python", "bench.py"]
+CMD ["--help"]

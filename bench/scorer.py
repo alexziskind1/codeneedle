@@ -33,23 +33,17 @@ class FunctionScore:
     expected_tagged: list[LineResult]    # expected primary side (matched/missing)
     predicted_tagged: list[LineResult]   # model output side (matched/halluc/bonus)
     error: str | None = None             # request errored or returned no usable content; renderers should show ERROR instead of FAIL so it isn't confused with a real recall miss
+    spacing_deviation: bool = False      # strict failed but relaxed passed — content correct, indentation wrong
 
 
-def score(
+def _score_inner(
     name: str,
     primary: list[str],
     bonus: list[str],
     predicted_text: str,
-    relax_indent: bool = False,
+    relax_indent: bool,
 ) -> FunctionScore:
-    """Score a single function's predicted output against expected lines.
-
-    `relax_indent=True` normalizes both sides with `.strip()` instead of
-    `.rstrip()` only — i.e. leading whitespace is ignored when matching. Use
-    this for models like Gemma that emit semantically-correct code but
-    normalize indentation, where strict verbatim matching would unfairly
-    penalize content the model actually got right. Default is strict.
-    """
+    """Core scoring logic for a single normalization mode."""
     predicted = _clean_output(predicted_text)
     norm = _norm_relaxed if relax_indent else _norm
 
@@ -58,14 +52,12 @@ def score(
     exp_full = exp_primary + exp_bonus
     pred = [norm(l) for l in predicted]
 
-    # trim trailing blank lines on prediction (common model artifact)
     while pred and pred[-1] == "":
         pred.pop()
 
     sm = SequenceMatcher(a=exp_full, b=pred, autojunk=False)
 
     matched_exp = [False] * len(exp_full)
-    # -1 = hallucinated, 0 = primary match, 1 = bonus match
     pred_kind = [-1] * len(pred)
 
     for block in sm.get_matching_blocks():
@@ -83,21 +75,15 @@ def score(
     )
     hallucinated = sum(1 for k in pred_kind if k == -1)
 
-    # Blank lines shouldn't count as hallucinations (models often insert them).
     hallucinated -= sum(
         1 for i, k in enumerate(pred_kind) if k == -1 and pred[i].strip() == ""
     )
 
-    # Display the ORIGINAL lines (with their actual indentation), not the
-    # normalized form used for matching. Otherwise indent-relaxed scoring
-    # would render every line lstripped, hiding the model's real output.
     expected_display = [l.rstrip() for l in primary]
     pred_display = [l.rstrip() for l in _clean_output(predicted_text)]
     while pred_display and pred_display[-1] == "":
         pred_display.pop()
     if len(pred_display) != len(pred):
-        # Defensive: alignment of pred_display to pred should match because
-        # both started from the same _clean_output and stripped trailing blanks.
         pred_display = pred_display[: len(pred)] + [""] * max(0, len(pred) - len(pred_display))
 
     expected_tagged = [
@@ -126,6 +112,36 @@ def score(
         expected_tagged=expected_tagged,
         predicted_tagged=predicted_tagged,
     )
+
+
+def score(
+    name: str,
+    primary: list[str],
+    bonus: list[str],
+    predicted_text: str,
+    relax_indent: bool = False,
+) -> FunctionScore:
+    """Score a single function's predicted output against expected lines.
+
+    Always checks for spacing deviations: if strict scoring fails but
+    relaxed scoring passes, the result uses relaxed scores (correct match
+    count, no inflated hallucinations) and flags spacing_deviation=True.
+
+    `relax_indent=True` skips the strict pass entirely.
+    """
+    if relax_indent:
+        return _score_inner(name, primary, bonus, predicted_text, relax_indent=True)
+
+    strict = _score_inner(name, primary, bonus, predicted_text, relax_indent=False)
+    if strict.passed:
+        return strict
+
+    relaxed = _score_inner(name, primary, bonus, predicted_text, relax_indent=True)
+    if relaxed.passed:
+        relaxed.spacing_deviation = True
+        return relaxed
+
+    return strict
 
 
 def _norm(s: str) -> str:

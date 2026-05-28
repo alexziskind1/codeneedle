@@ -1,0 +1,11 @@
+# IronLLM Rust codebase — multi-file corpus. ~123KB / ~35K tokens.
+# 4 crates: tool_parser, flow_orchestrator, config, vm_manager.
+# ~21 named functions with ≥20 body lines.
+
+[files]
+directory = "fixtures"
+glob = "ironllm_*.rs"
+
+[sample]
+k = 16
+seed = 42

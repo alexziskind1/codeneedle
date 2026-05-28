@@ -40,12 +40,22 @@ ANCHOR_PHRASE = {
     "js": "starting immediately after the line containing `function {name}(` "
           "or the assignment that introduces it (the line with the opening "
           "brace `{{`)",
+    "ts": "starting immediately after the line containing `function {name}(` "
+          "or the assignment that introduces it (the line with the opening "
+          "brace `{{`)",
     "py": "starting with the first body line after the `def {name}(...):` "
           "signature (including the docstring if present)",
+    "rs": "starting immediately after the line containing `fn {name}(` "
+          "(the line with the opening brace `{{`)",
+    "cpp": "starting immediately after the line containing the function "
+           "signature for `{name}` (the line with the opening brace `{{`)",
 }
 SIGNATURE_MARKER = {
     "js": "function {name}(",
+    "ts": "function {name}(",
     "py": "def {name}(",
+    "rs": "fn {name}(",
+    "cpp": "{name}(",
 }
 # Qwen3 (and other reasoning-enabled models) treat `/no_think` as a directive
 # to skip chain-of-thought. Ignored by non-reasoning models. For a pure recall
@@ -295,6 +305,7 @@ def run_benchmark(
                     "primary_total": sc.primary_total,
                     "hallucinated": sc.hallucinated,
                     "bonus_matched": sc.bonus_matched,
+                    "spacing_deviation": sc.spacing_deviation,
                     "latency_s": r.latency_s,
                     "prompt_chars": r.prompt_chars,
                     "response": r.response,

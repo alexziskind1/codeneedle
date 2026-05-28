@@ -42,14 +42,22 @@ def render_function(score: FunctionScore, color: bool | None = None) -> str:
         )
         return header
 
-    status = "PASS" if score.passed else "FAIL"
-    status_color = "\x1b[32m" if score.passed else "\x1b[31m"
+    if score.spacing_deviation:
+        status = "PASS*"
+        status_color = "\x1b[33m"  # yellow — pass with caveat
+    elif score.passed:
+        status = "PASS"
+        status_color = "\x1b[32m"
+    else:
+        status = "FAIL"
+        status_color = "\x1b[31m"
+    spacing_note = "  spacing=deviated" if score.spacing_deviation else ""
     header = (
         f"\n=== {score.name}  "
         f"[{_colorize(color, status_color, status)}]  "
         f"matched={score.primary_matched}/{score.primary_total}  "
         f"hallucinated={score.hallucinated}  "
-        f"bonus={score.bonus_matched} ==="
+        f"bonus={score.bonus_matched}{spacing_note} ==="
     )
     out = [header, "  -- model output --"]
     for r in score.predicted_tagged:
@@ -73,6 +81,7 @@ def render_summary(scores: list[FunctionScore], color: bool | None = None) -> st
     total_possible = sum(s.primary_total for s in real)
     total_halluc = sum(s.hallucinated for s in real)
     total_bonus = sum(s.bonus_matched for s in real)
+    total_spacing = sum(1 for s in real if s.spacing_deviation)
 
     lines = [
         "",
@@ -82,6 +91,7 @@ def render_summary(scores: list[FunctionScore], color: bool | None = None) -> st
         f"  Primary lines matched: {total_matched}/{total_possible}",
         f"  Hallucinated lines:    {total_halluc}",
         f"  Bonus (extra correct): {total_bonus}",
+        f"  Spacing Deviation:     {total_spacing}",
     ]
 
     # Per-function one-liner
@@ -92,10 +102,17 @@ def render_summary(scores: list[FunctionScore], color: bool | None = None) -> st
             mark = _colorize(color, "\x1b[35m", "!")
             lines.append(f"    {mark} {s.name:<40} ERROR  {s.error}")
         else:
-            mark = _colorize(color, "\x1b[32m", "✓") if s.passed else _colorize(color, "\x1b[31m", "✗")
+            if s.spacing_deviation:
+                mark = _colorize(color, "\x1b[33m", "~")
+            elif s.passed:
+                mark = _colorize(color, "\x1b[32m", "✓")
+            else:
+                mark = _colorize(color, "\x1b[31m", "✗")
+            spacing_col = "  spacing=yes" if s.spacing_deviation else ""
             lines.append(
                 f"    {mark} {s.name:<40} "
                 f"matched={s.primary_matched:>2}/{s.primary_total}  "
                 f"halluc={s.hallucinated:>2}  bonus={s.bonus_matched:>2}"
+                f"{spacing_col}"
             )
     return "\n".join(lines)

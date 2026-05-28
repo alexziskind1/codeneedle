@@ -48,16 +48,26 @@ def language_of(path: Path) -> str:
         return "js"
     if suffix == ".py":
         return "py"
-    raise ValueError(f"Unsupported file type: {suffix!r}. Supported: .js, .mjs, .cjs, .py")
+    if suffix == ".rs":
+        return "rs"
+    if suffix in (".cpp", ".cc", ".cxx", ".c", ".hpp", ".h"):
+        return "cpp"
+    if suffix in (".ts", ".tsx", ".mts", ".cts"):
+        return "ts"
+    raise ValueError(f"Unsupported file type: {suffix!r}. Supported: .js, .py, .rs, .cpp, .ts")
 
 
 def extract(path: Path) -> list[FunctionTarget]:
     source = path.read_text()
     lang = language_of(path)
-    if lang == "js":
-        targets = _extract_js(source)
-    else:
-        targets = _extract_py(source)
+    extractors = {
+        "js": _extract_js,
+        "ts": _extract_js,
+        "py": _extract_py,
+        "rs": _extract_rs,
+        "cpp": _extract_cpp,
+    }
+    targets = extractors[lang](source)
     for t in targets:
         t.language = lang
         t.source_path = path
@@ -119,7 +129,7 @@ def load_source_glob(
 
 
 def _file_header(lang: str, path: Path) -> str:
-    marker = "//" if lang == "js" else "#"
+    marker = "#" if lang == "py" else "//"
     return f"{marker} ====== {path} ======\n"
 
 
@@ -252,6 +262,191 @@ def _extract_py(source: str) -> list[FunctionTarget]:
         targets.append(
             FunctionTarget(name=node.name, start_line=start, body_lines=body)
         )
+    return targets
+
+
+# --- Rust ---------------------------------------------------------------------
+
+
+import re
+
+_RS_FN_RE = re.compile(
+    r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(",
+)
+
+_RS_RAW_STRING_OPEN = re.compile(r'r(#+)"')
+
+
+def _count_braces_rs(line: str) -> int:
+    """Count net brace depth change, skipping string literals and raw strings."""
+    delta = 0
+    i = 0
+    n = len(line)
+    while i < n:
+        ch = line[i]
+        if ch == '/' and i + 1 < n and line[i + 1] == '/':
+            break
+        if ch == '"':
+            i += 1
+            while i < n and line[i] != '"':
+                if line[i] == '\\':
+                    i += 1
+                i += 1
+            i += 1
+            continue
+        m = _RS_RAW_STRING_OPEN.match(line, i) if ch == 'r' else None
+        if m:
+            hashes = len(m.group(1))
+            closer = '"' + '#' * hashes
+            i = m.end()
+            while i < n:
+                ci = line.find(closer, i)
+                if ci == -1:
+                    i = n
+                    break
+                i = ci + len(closer)
+                break
+            continue
+        if ch == '{':
+            delta += 1
+        elif ch == '}':
+            delta -= 1
+        i += 1
+    return delta
+
+
+def _count_braces_rs_block(lines: list[str], start: int) -> tuple[int, int]:
+    """Count braces from start until depth returns to 0. Handles multi-line raw strings.
+    Returns (net_depth_at_end, first_line_past_block)."""
+    depth = 0
+    in_raw = False
+    raw_closer = ""
+    i = start
+    while i < len(lines):
+        line = lines[i]
+        col = 0
+        n = len(line)
+        while col < n:
+            if in_raw:
+                ci = line.find(raw_closer, col)
+                if ci == -1:
+                    col = n
+                else:
+                    col = ci + len(raw_closer)
+                    in_raw = False
+                continue
+            ch = line[col]
+            if ch == '/' and col + 1 < n and line[col + 1] == '/':
+                break
+            if ch == '"':
+                col += 1
+                while col < n and line[col] != '"':
+                    if line[col] == '\\':
+                        col += 1
+                    col += 1
+                col += 1
+                continue
+            m = _RS_RAW_STRING_OPEN.match(line, col) if ch == 'r' else None
+            if m:
+                hashes = len(m.group(1))
+                raw_closer = '"' + '#' * hashes
+                col = m.end()
+                ci = line.find(raw_closer, col)
+                if ci == -1:
+                    in_raw = True
+                    col = n
+                else:
+                    col = ci + len(raw_closer)
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+            col += 1
+        i += 1
+        if depth <= 0 and not in_raw:
+            break
+    return depth, i
+
+
+def _extract_rs(source: str) -> list[FunctionTarget]:
+    lines = source.splitlines()
+    targets: list[FunctionTarget] = []
+    seen: set[str] = set()
+    i = 0
+    while i < len(lines):
+        m = _RS_FN_RE.match(lines[i])
+        if m:
+            name = m.group(1)
+            _, j = _count_braces_rs_block(lines, i)
+            body = lines[i + 1 : j - 1]
+            if len(body) >= MIN_BODY_LINES and name not in seen:
+                seen.add(name)
+                targets.append(
+                    FunctionTarget(
+                        name=name,
+                        start_line=i + 2,
+                        body_lines=body,
+                    )
+                )
+            i = j
+        else:
+            i += 1
+    return targets
+
+
+# --- C / C++ ------------------------------------------------------------------
+
+
+_CPP_FN_RE = re.compile(
+    r"^[a-zA-Z_][\w\s*&<>]*\b((?:\w+::)*\w+)\s*\([^;]*\)\s*(?:const\s*)?(?:override\s*)?(?:noexcept\s*)?\{?\s*$",
+)
+
+
+def _extract_cpp(source: str) -> list[FunctionTarget]:
+    lines = source.splitlines()
+    targets: list[FunctionTarget] = []
+    seen: set[str] = set()
+    i = 0
+    while i < len(lines):
+        m = _CPP_FN_RE.match(lines[i])
+        if m:
+            name = m.group(1)
+            depth = 0
+            for ch in lines[i]:
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+            if depth == 0:
+                # Opening brace on next line
+                i += 1
+                if i < len(lines) and "{" in lines[i]:
+                    depth = 1
+                else:
+                    continue
+            start = i
+            j = i + 1
+            while j < len(lines) and depth > 0:
+                for ch in lines[j]:
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                j += 1
+            body = lines[start + 1 : j - 1]
+            if len(body) >= MIN_BODY_LINES and name not in seen:
+                seen.add(name)
+                targets.append(
+                    FunctionTarget(
+                        name=name,
+                        start_line=start + 2,
+                        body_lines=body,
+                    )
+                )
+            i = j
+        else:
+            i += 1
     return targets
 
 

@@ -1,0 +1,11 @@
+# systop C++17 TUI system monitor — multi-file corpus. ~47KB / ~13K tokens.
+# All .cpp source files combined.
+# ~15 named functions with ≥20 body lines.
+
+[files]
+directory = "fixtures"
+glob = "*.cpp"
+
+[sample]
+k = 16
+seed = 42
