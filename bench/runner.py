@@ -165,7 +165,7 @@ def run_benchmark(
 
     multi_file = len(source.files) > 1
 
-    # Pre-flight: send the first real prompt with max_tokens=1 to check that
+    # Pre-flight: send the first real prompt with max_tokens=16 to check that
     # the loaded context is big enough. Misleading FAILs from context-too-small
     # are the easiest mistake to make with LM Studio (TTL-driven JIT reload at
     # default 4K context). Better to abort up front.
@@ -173,7 +173,7 @@ def run_benchmark(
         probe_prompt = _build_prompt(chosen[0], text, multi_file, suppress_thinking)
         print(
             f"\nPre-flight: probing context fit with a {len(probe_prompt):,}-char prompt "
-            f"(max_tokens=1)...",
+            f"(max_tokens=16)...",
             flush=True,
         )
         err = _preflight_context_check(probe_prompt, cfg)

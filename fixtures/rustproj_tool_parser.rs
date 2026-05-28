@@ -9,7 +9,7 @@
 //! ```
 //!
 //! This module accumulates those fragments into complete `ToolCall`s,
-//! then maps each tool name to a robairagapi endpoint so the caller
+//! then maps each tool name to a ironllmragapi endpoint so the caller
 //! can fire the HTTP request.
 
 use serde::Deserialize;
