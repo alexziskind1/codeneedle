@@ -32,15 +32,14 @@ def _resolve_source(args: argparse.Namespace):
     from bench.extract import load_source_glob
     from bench.runner import source_from_single_file
 
-    if getattr(args, "corpus", None):
+    corpus_name = getattr(args, "corpus", None) or "http_server"
+    if not getattr(args, "file", None):
         from bench.config import load_corpus
 
-        corpus = load_corpus(args.corpus)
+        corpus = load_corpus(corpus_name)
         src = load_source_glob(corpus.directory, corpus.glob, corpus.limit)
         return src, corpus
-    if getattr(args, "file", None):
-        return source_from_single_file(Path(args.file)), None
-    raise SystemExit("error: pass either --corpus NAME or --file PATH")
+    return source_from_single_file(Path(args.file)), None
 
 
 # --- extract -------------------------------------------------------------
@@ -89,6 +88,11 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    if getattr(args, "corpus", None) == "all":
+        return cmd_run_all(args)
+    if getattr(args, "corpus", None) == "tools":
+        return cmd_run_tools(args)
+
     from bench.config import auto_dump_path, load_model
     from bench.runner import run_benchmark
 
@@ -165,6 +169,179 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     passed = sum(1 for s in scores if s.passed)
     return 0 if passed == len(scores) else 1
+
+
+# --- run tools ------------------------------------------------------------
+
+
+def cmd_run_tools(args: argparse.Namespace) -> int:
+    from bench.config import load_model
+    from bench.toolcall import run_toolcall_benchmark
+
+    if not args.model:
+        raise SystemExit("error: --model is required")
+    model, model_from_file = load_model(args.model)
+    if not model_from_file:
+        print(
+            f"  (no model config '{args.model}' found; using as raw model identifier with defaults)",
+            file=sys.stderr,
+        )
+
+    if args.base_url:
+        model.client.base_url = args.base_url
+    if args.api_key:
+        model.client.api_key = args.api_key
+    if args.temperature is not None:
+        model.client.temperature = args.temperature
+    if args.max_tokens is not None:
+        model.client.max_tokens = args.max_tokens
+    if args.timeout is not None:
+        model.client.timeout = args.timeout
+
+    if args.dump:
+        dump_path = Path(args.dump)
+    else:
+        DEFAULT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        dump_path = DEFAULT_RESULTS_DIR / f"tools__{model.name}.json"
+
+    scores = run_toolcall_benchmark(
+        base_url=model.client.base_url,
+        model=model.client.model,
+        dump_path=dump_path,
+        api_key=model.client.api_key,
+        temperature=model.client.temperature,
+        max_tokens=model.client.max_tokens,
+        timeout=model.client.timeout,
+    )
+    passed = sum(1 for s in scores if s.overall_pass)
+    return 0 if passed == len(scores) else 1
+
+
+# --- run all --------------------------------------------------------------
+
+
+def _discover_corpora() -> list[str]:
+    """Return sorted list of corpus names from configs/corpora/."""
+    corpora_dir = REPO_ROOT / "configs" / "corpora"
+    return sorted(p.stem for p in corpora_dir.glob("*.toml"))
+
+
+def cmd_run_all(args: argparse.Namespace) -> int:
+    from bench.config import auto_dump_path, load_corpus, load_model
+    from bench.extract import load_source_glob
+    from bench.report import render_summary
+    from bench.runner import run_benchmark
+
+    corpora = _discover_corpora()
+    print(f"Running all {len(corpora)} corpora: {', '.join(corpora)}\n", flush=True)
+
+    if not args.model:
+        raise SystemExit("error: --model is required")
+    model, model_from_file = load_model(args.model)
+    if not model_from_file:
+        print(
+            f"  (no model config '{args.model}' found; using as raw model identifier with defaults)",
+            file=sys.stderr,
+        )
+
+    if args.base_url:
+        model.client.base_url = args.base_url
+    if args.api_key:
+        model.client.api_key = args.api_key
+    if args.temperature is not None:
+        model.client.temperature = args.temperature
+    if args.max_tokens is not None:
+        model.client.max_tokens = args.max_tokens
+    if args.timeout is not None:
+        model.client.timeout = args.timeout
+    suppress_thinking = model.suppress_thinking and not args.think
+
+    relax_indent = model.relax_indent
+    if args.relax_indent:
+        relax_indent = True
+    if args.strict_indent:
+        relax_indent = False
+
+    all_scores = []
+    corpus_results = []
+    any_failure = False
+
+    for corpus_name in corpora:
+        print(f"\n{'='*60}", flush=True)
+        print(f"  CORPUS: {corpus_name}", flush=True)
+        print(f"{'='*60}\n", flush=True)
+
+        corpus = load_corpus(corpus_name)
+        src = load_source_glob(corpus.directory, corpus.glob, corpus.limit)
+
+        k = args.k if args.k is not None else corpus.sample_k
+        seed = args.seed if args.seed is not None else corpus.sample_seed
+
+        DEFAULT_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        lang_tag = src.language
+        dump_path = DEFAULT_RESULTS_DIR / f"{model.name}__all-{lang_tag}.json"
+
+        scores = run_benchmark(
+            source=src,
+            cfg=model.client,
+            k=k,
+            seed=seed,
+            dump_path=dump_path,
+            suppress_thinking=suppress_thinking,
+            skip_preflight=args.skip_preflight,
+            fail_fast_after=None if args.no_fail_fast else args.fail_fast_after,
+            relax_indent=relax_indent,
+        )
+        passed = sum(1 for s in scores if s.passed)
+        total = len(scores)
+        corpus_results.append((corpus_name, passed, total, scores))
+        all_scores.extend(scores)
+        if passed < total:
+            any_failure = True
+
+    # Run tool calling benchmark as part of --corpus all
+    print(f"\n{'='*60}", flush=True)
+    print(f"  CORPUS: tools", flush=True)
+    print(f"{'='*60}\n", flush=True)
+
+    from bench.toolcall import run_toolcall_benchmark
+    tool_dump = DEFAULT_RESULTS_DIR / f"{model.name}__all-tools.json"
+    tool_scores = run_toolcall_benchmark(
+        base_url=model.client.base_url,
+        model=model.client.model,
+        dump_path=tool_dump,
+        api_key=model.client.api_key,
+        temperature=model.client.temperature,
+        max_tokens=model.client.max_tokens,
+        timeout=model.client.timeout,
+    )
+    tool_passed = sum(1 for s in tool_scores if s.overall_pass)
+    tool_total = len(tool_scores)
+    corpus_results.append(("tools", tool_passed, tool_total, []))
+    if tool_passed < tool_total:
+        any_failure = True
+
+    # Final combined report
+    print(f"\n{'='*60}", flush=True)
+    print(f"  COMBINED RESULTS — {model.name}", flush=True)
+    print(f"{'='*60}\n", flush=True)
+
+    for corpus_name, passed, total, scores in corpus_results:
+        status = "✓" if passed == total else "✗"
+        if corpus_name == "tools":
+            print(f"  {status} {corpus_name:<20} {passed}/{total} passed", flush=True)
+        else:
+            matched = sum(s.primary_matched for s in scores if not s.error)
+            possible = sum(s.primary_total for s in scores if not s.error)
+            spacing = sum(1 for s in scores if s.spacing_deviation)
+            sp_note = f"  spacing={spacing}" if spacing else ""
+            print(f"  {status} {corpus_name:<20} {passed}/{total} passed  "
+                  f"lines={matched}/{possible}{sp_note}", flush=True)
+
+    print(flush=True)
+    print(render_summary(all_scores), flush=True)
+
+    return 1 if any_failure else 0
 
 
 # --- rescore --------------------------------------------------------------
