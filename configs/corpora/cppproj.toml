@@ -1,9 +1,10 @@
-# C++17 multi-file corpus. ~48KB / ~13K tokens.
+# C++17 multi-file corpus. ~50KB / ~13K tokens.
 # All .cpp source files combined.
-# ~14 named functions with ≥20 body lines.
+# ~19 named functions with ≥20 body lines, incl. a gRPC-style method with a
+# namespace-qualified return type and a multi-line parameter list.
 
 [files]
-directory = "fixtures"
+directory = "fixtures/cppproj"
 glob = "*.cpp"
 
 [sample]

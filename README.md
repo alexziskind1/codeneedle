@@ -73,6 +73,8 @@ configs/
   corpora/        what files to test, sample size — one TOML per corpus
   models/         model identifier and per-model knobs — one TOML per model
 fixtures/         source files to test against (jquery.js, http_server.py, …)
+  cppproj/        C++ multi-file corpus
+  rustproj/       Rust multi-file corpus
 results/          JSON dumps from every run, auto-named <corpus>__<model>.json
 analysis/
   visualize.py    Plotly dashboard builder
@@ -141,8 +143,8 @@ seed = 42
 Shipped:
 - `http_server` — single ~50KB Python file, fits any context, fast iteration
 - `jquery` — ~280KB / ~80K-token JS, closest to the video's setup (needs ≥100K loaded context)
-- `rustproj` — ~120KB Rust, 4 crates, 20 functions (multi-file with raw string literals)
-- `cppproj` — ~48KB C++, 14 functions with qualified names (`Class::method`)
+- `rustproj` — ~125KB Rust, 5 modules, ~34 functions (raw strings, multi-line signatures, where clauses, pub(crate)/unsafe/const/extern, nested generics)
+- `cppproj` — ~50KB C++, ~24 functions with qualified names (`Class::method`), incl. multi-line signatures and gRPC-style methods
 
 If `glob` matches multiple files, they're concatenated with comment-marker
 headers (`# === path ===` / `// === path ===`) so the model sees file
@@ -250,7 +252,7 @@ python3 analysis/visualize.py
 # (see analysis/VIZ_README.md for what each chart shows)
 ```
 
-Supported source languages: `.js`/`.mjs`/`.cjs` (esprima), `.ts`/`.tsx` (esprima), `.py` (`ast`), `.rs` (brace-counted, raw-string-aware), `.cpp`/`.cc`/`.c`/`.h` (brace-counted, qualified names).
+Supported source languages: `.js`/`.mjs`/`.cjs` (esprima), `.ts`/`.tsx` (esprima), `.py` (`ast`), `.rs` (brace-counted, raw-string-aware, multi-line signatures), `.cpp`/`.cc`/`.c`/`.h` (brace-counted, qualified names, multi-line signatures).
 
 ## Reading the output
 
