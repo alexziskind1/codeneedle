@@ -35,17 +35,22 @@ python3 bench.py run --corpus http_server --model qwen36-35b
 The rest of this README writes commands as `python3 …` for brevity — prepend
 `uv run ` if your venv isn't active.
 
-## Docker (Optional)
+## Docker
 
-Start interactive bash session with all dependencies already pre-installed
+Two modes: baked benchmark image or dev shell.
 
 ```sh
-docker compose run --rm app
+# Baked image — source + deps built in, just point at a model
+docker compose run --rm app run --corpus http_server --model qwen36-35b --base-url http://localhost:1234
+
+# Or via docker run directly
+docker run --rm --network host -v ./results:/app/results codeneedle:latest run --corpus http_server --model qwen36-35b --base-url http://localhost:1234
+
+# Dev shell — mounts host source, drops into bash
+docker compose run --rm dev
 ```
 
-Now you can use ether `uv run` or `python` directly
-
-Close interactive shell by pressing `CTRL-d` or typing `exit` plus `RETURN`
+Build the baked image: `docker build -t codeneedle:latest .`
 
 ## Quick start
 
@@ -68,6 +73,8 @@ configs/
   corpora/        what files to test, sample size — one TOML per corpus
   models/         model identifier and per-model knobs — one TOML per model
 fixtures/         source files to test against (jquery.js, http_server.py, …)
+  cppproj/        C++ multi-file corpus
+  rustproj/       Rust multi-file corpus
 results/          JSON dumps from every run, auto-named <corpus>__<model>.json
 analysis/
   visualize.py    Plotly dashboard builder
@@ -136,6 +143,8 @@ seed = 42
 Shipped:
 - `http_server` — single ~50KB Python file, fits any context, fast iteration
 - `jquery` — ~280KB / ~80K-token JS, closest to the video's setup (needs ≥100K loaded context)
+- `rustproj` — ~125KB Rust, 5 modules, ~34 functions (raw strings, multi-line signatures, where clauses, pub(crate)/unsafe/const/extern, nested generics)
+- `cppproj` — ~50KB C++, ~24 functions with qualified names (`Class::method`), incl. multi-line signatures and gRPC-style methods
 
 If `glob` matches multiple files, they're concatenated with comment-marker
 headers (`# === path ===` / `// === path ===`) so the model sees file
@@ -228,6 +237,12 @@ python3 bench.py extract --corpus http_server          # sampled
 python3 bench.py extract --corpus http_server --all    # every extractable function
 python3 bench.py extract --corpus http_server --show is_cgi   # ground truth
 
+# Run all corpora (py, rs, js, cpp + tool calling) in one go
+python3 bench.py run --corpus all --model qwen36-35b --base-url http://localhost:1234
+
+# Run tool calling benchmark only (23 tools, 230 tests)
+python3 bench.py run --corpus tools --model qwen36-35b --base-url http://localhost:1234
+
 # Re-score a prior dump without re-querying
 python3 bench.py rescore results/http_server__qwen36-35b.json
 
@@ -237,7 +252,7 @@ python3 analysis/visualize.py
 # (see analysis/VIZ_README.md for what each chart shows)
 ```
 
-Supported source languages: `.js`, `.mjs`, `.cjs` (esprima), `.py` (`ast`).
+Supported source languages: `.js`/`.mjs`/`.cjs` (esprima), `.ts`/`.tsx` (esprima), `.py` (`ast`), `.rs` (brace-counted, raw-string-aware, multi-line signatures), `.cpp`/`.cc`/`.c`/`.h` (brace-counted, qualified names, multi-line signatures).
 
 ## Reading the output
 
@@ -249,6 +264,17 @@ Per-function diff uses colors matching the video:
 - **blue/cyan**  — extra correct lines past the primary 20 (bonus)
 
 Pass threshold per function: ≥ 8 of the 20 expected lines matched.
+
+**Spacing deviation**: if a function fails strict matching but passes with
+relaxed indentation, it's marked `PASS*` with `spacing=yes` — the content was
+correct but the indentation was wrong. The summary shows `Spacing Deviation: N`.
+
+### Tool calling output
+
+`--corpus tools` scores each tool call across 7 dimensions: valid JSON, correct
+tool selected, required params present, param types valid, enum values valid,
+numeric constraints respected, no hallucinated params. Per-tool and overall
+summaries are printed.
 
 ## Server setup notes
 
@@ -292,6 +318,7 @@ Keep temperature at 0. Default `max_tokens=6000` to leave room for reasoning mod
 - `bench/scorer.py` — LCS alignment, line classification, pass/fail
 - `bench/report.py` — ANSI color rendering
 - `bench/runner.py` — orchestration: prompt assembly, query, score, dump
+- `bench/toolcall.py` — tool calling benchmark: definitions, prompts, scoring, runner
 - `analysis/visualize.py` — builds Plotly HTML dashboards from `results/*.json`
   (see [`analysis/VIZ_README.md`](analysis/VIZ_README.md) for chart-by-chart details)
 - `smoke_test.py` — end-to-end sanity check without an LLM

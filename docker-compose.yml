@@ -1,9 +1,18 @@
 services:
+  # Baked benchmark image — run tests directly
   app:
+    build: .
+    image: codeneedle:latest
+    volumes:
+      - ./results:/app/results
+    network_mode: host
+
+  # Dev shell — mounts source from host, drop into bash
+  dev:
     build:
       context: .
-      target: executor
-    hostname: infra
+      dockerfile: Dockerfile.dev
+    hostname: codeneedle-dev
     stdin_open: true
     tty: true
     working_dir: /app

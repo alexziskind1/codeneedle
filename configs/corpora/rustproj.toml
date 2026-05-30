@@ -1,0 +1,12 @@
+# Rust multi-file corpus. ~125KB / ~36K tokens.
+# 5 modules: tool_parser, flow_orchestrator, config, vm_manager, variants.
+# ~34 named functions with ≥20 body lines, incl. multi-line signatures, where
+# clauses, pub(crate)/unsafe/const/extern qualifiers, and nested generics.
+
+[files]
+directory = "fixtures/rustproj"
+glob = "rustproj_*.rs"
+
+[sample]
+k = 16
+seed = 42
