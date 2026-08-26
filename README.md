@@ -514,6 +514,26 @@ interactive console would have coped.
    If a model honors none of the three, give it budget for the chain-of-thought
    *plus* the answer — bump to 8000+ if responses come back empty.
 
+### Hosted endpoints with rate limits
+
+The client automatically retries `HTTP 429` (rate-limit) responses up to 3
+times. It honors a server-supplied `Retry-After` header (in seconds), and
+falls back to exponential backoff anchored at 60 seconds when the header is
+missing — so a `bench.py run` against a Tier-1 OpenAI / Anthropic Build-tier
+account no longer aborts after the first ratelimit. You'll see lines like:
+
+```
+⏸ HTTP 429 — sleeping 6.0s before retry 1/3
+```
+
+stream past while a long benchmark paces itself. After 3 retries the
+underlying `RuntimeError` surfaces, so a structurally-too-large request
+(e.g. a single Anthropic call exceeding the per-minute input-tokens limit)
+still fails fast rather than looping forever.
+
+Other 4xx/5xx errors (auth, bad request, server crash) are **not** retried —
+they raise immediately, same as before the patch.
+
 ## Module map
 
 - `benchmark_plan.md` — analysis of what the benchmark measures and why
@@ -527,3 +547,4 @@ interactive console would have coped.
 - `analysis/visualize.py` — builds Plotly HTML dashboards from `results/*.json`
   (see [`analysis/VIZ_README.md`](analysis/VIZ_README.md) for chart-by-chart details)
 - `smoke_test.py` — end-to-end sanity check without an LLM
+- `client_smoke_test.py` — client-only smoke test (mocked HTTP) for the 429-retry path
